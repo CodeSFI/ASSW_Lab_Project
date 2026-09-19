@@ -1,0 +1,45 @@
+# ==============================================================================
+# PLANTILLA DE CONFIGURACIÓN DE VARIABLES (EJEMPLO)
+# Copia este archivo como 'terraform.tfvars' y completa tus credenciales reales:
+#   cp terraform.tfvars.example terraform.tfvars
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Credenciales y Endpoint de OpenStack (Keystone v3)
+# ------------------------------------------------------------------------------
+# URL del servicio Keystone (reemplazar la IP si el nodo maestro cambia)
+os_auth_url         = "http://156.35.95.9:5000/v3"
+
+# Identificador de usuario de la Universidad (ej. UOXXXXXX)
+os_user_name        = "TU_USUARIO_UO"
+
+# Contraseña de acceso a la plataforma OpenStack
+os_password         = "TU_PASSWORD_AQUI"
+
+# Nombre del proyecto/tenant asignado en OpenStack
+os_project_name     = "TU_PROYECTO_project"
+
+# Dominios de identidad (en Keystone suelen ser 'Default')
+os_user_domain_name = "Default"
+os_project_domain_name = "Default"
+
+# Región del centro de datos
+os_region           = "RegionOne"
+
+# ------------------------------------------------------------------------------
+# 2. Parámetros de la Infraestructura
+# ------------------------------------------------------------------------------
+# Nombre de la clave SSH cargada previamente en OpenStack (Key Pairs)
+keypair_name          = "Lab_project"
+
+# Nombre de la red pública para asignación de Floating IPs
+external_network_name = "public"
+
+# Nombre de la imagen base de SO registrada en Glance
+image_name            = "Ubuntu-22.04"
+
+# Sabor de cómputo para las instancias (ajustado a cuota de laboratorio)
+flavor_name           = "ephym_small_2"
+
+# Prefijo identificativo para los recursos del proyecto (evita colisiones)
+project_prefix        = "cantabrico"
