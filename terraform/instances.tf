@@ -152,31 +152,20 @@ resource "openstack_compute_instance_v2" "db_core" {
 }
 
 # ==============================================================================
-# ASIGNACIÓN DE IPs FLOTANTES (PÚBLICAS)
-# Principio de Mínimos Privilegios: Solo 2 de las 5 VMs tienen IP pública.
-# Los nodos de aplicación y la base de datos quedan completamente ocultos a Internet.
-# Compatibilidad con proveedor moderno (v3+): Se asocian mediante el puerto de
-# red (Neutron) en lugar de la llamada legada de cómputo (Nova).
+# ASIGNACIÓN DE IP FLOTANTE PREEXISTENTE PARAMETRIZADA (BASTIÓN)
+# Principio de defensa en profundidad y optimización de cuota:
+# Se consulta la IP flotante ya reservada en Horizon mediante el parámetro
+# 'bastion_floating_ip'. Esto evita realizar peticiones POST de reserva a Neutron,
+# previniendo errores de OverQuota.
 # ==============================================================================
 
-# 1. Reserva una IP flotante del pool público de OpenStack para el Balanceador
-resource "openstack_networking_floatingip_v2" "fip_lb" {
-  pool = var.external_network_name
+# Consulta el DataSource de la IP existente indicada en la variable
+data "openstack_networking_floatingip_v2" "fip_bastion" {
+  address = var.bastion_floating_ip
 }
 
-# Asocia la IP pública al puerto de la interfaz DMZ del Balanceador
-resource "openstack_networking_floatingip_associate_v2" "fip_lb_assoc" {
-  floating_ip = openstack_networking_floatingip_v2.fip_lb.address
-  port_id     = openstack_networking_port_v2.port_lb_dmz.id
-}
-
-# 2. Reserva una segunda IP flotante para el Bastión
-resource "openstack_networking_floatingip_v2" "fip_bastion" {
-  pool = var.external_network_name
-}
-
-# Asocia la IP pública al puerto de la interfaz de gestión del Bastión para permitir la entrada a los operadores/evaluador vía SSH
+# Asocia la IP pública al puerto de la interfaz de gestión del Bastión
 resource "openstack_networking_floatingip_associate_v2" "fip_bastion_assoc" {
-  floating_ip = openstack_networking_floatingip_v2.fip_bastion.address
+  floating_ip = data.openstack_networking_floatingip_v2.fip_bastion.address
   port_id     = openstack_networking_port_v2.port_bastion_mgmt.id
 }

@@ -43,3 +43,10 @@ flavor_name           = "ephym_small_2"
 
 # Prefijo identificativo para los recursos del proyecto (evita colisiones)
 project_prefix        = "cantabrico"
+
+# ------------------------------------------------------------------------------
+# 3. Red y Acceso Externo
+# ------------------------------------------------------------------------------
+# IP flotante preexistente en Horizon (Red -> IPs flotantes) asignada al Bastión.
+# Permite asociar una dirección sin solicitar reservas nuevas (evita OverQuota).
+bastion_floating_ip   = "156.35.95.100"

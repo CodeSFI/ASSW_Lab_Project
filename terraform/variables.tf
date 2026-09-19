@@ -75,3 +75,8 @@ variable "project_prefix" {
   type        = string
   default     = "cantabrico"
 }
+
+variable "bastion_floating_ip" {
+  description = "Direccion IP flotante preexistente en Horizon para el Bastion"
+  type        = string
+}
