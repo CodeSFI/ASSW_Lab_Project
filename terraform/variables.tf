@@ -14,9 +14,24 @@ variable "os_user_name" {
 }
 
 variable "os_password" {
-  description = "Contraseña de acceso a OpenStack (marcada como sensible para no volcarla en logs)"
+  description = "Contraseña de acceso a OpenStack (marcada como sensible para no volcarla en logs). Opcional si se usan application credentials."
   type        = string
   sensitive   = true
+  default     = ""
+}
+
+variable "os_application_credential_id" {
+  description = "ID de Application Credential para autenticación (alternativa a password). Opcional."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "os_application_credential_secret" {
+  description = "Secret de Application Credential para autenticación. Opcional."
+  type        = string
+  sensitive   = true
+  default     = ""
 }
 
 variable "os_project_name" {

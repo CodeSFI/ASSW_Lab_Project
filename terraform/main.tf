@@ -25,12 +25,18 @@ terraform {
 # se suministran localmente mediante el archivo 'terraform.tfvars' (ignorado por Git).
 # ------------------------------------------------------------------------------
 provider "openstack" {
-  auth_url            = var.os_auth_url
-  user_name           = var.os_user_name
-  password            = var.os_password
-  tenant_name         = var.os_project_name
-  user_domain_name    = var.os_user_domain_name
-  project_domain_name = var.os_project_domain_name
+  auth_url = var.os_auth_url
+
+  # Application Credentials take priority if provided
+  application_credential_id     = var.os_application_credential_id != "" ? var.os_application_credential_id : null
+  application_credential_secret = var.os_application_credential_secret != "" ? var.os_application_credential_secret : null
+
+  # Fallback to username/password
+  user_name           = var.os_application_credential_id != "" ? null : var.os_user_name
+  password            = var.os_application_credential_id != "" ? null : var.os_password
+  tenant_name         = var.os_application_credential_id != "" ? null : var.os_project_name
+  user_domain_name    = var.os_application_credential_id != "" ? null : var.os_user_domain_name
+  project_domain_name = var.os_application_credential_id != "" ? null : var.os_project_domain_name
   region              = var.os_region
 }
 

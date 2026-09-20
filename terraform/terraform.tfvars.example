@@ -10,6 +10,7 @@
 # URL del servicio Keystone (reemplazar la IP si el nodo maestro cambia)
 os_auth_url         = "http://156.35.95.9:5000/v3"
 
+# OPCIÓN A: Autenticación con usuario/contraseña (tradicional)
 # Identificador de usuario de la Universidad (ej. UOXXXXXX)
 os_user_name        = "TU_USUARIO_UO"
 
@@ -23,6 +24,11 @@ os_project_name     = "TU_PROYECTO_project"
 os_user_domain_name = "Default"
 os_project_domain_name = "Default"
 
+# OPCIÓN B: Autenticación con Application Credentials (recomendado, sin password)
+# Descomenta y usa ESTO en lugar de os_user_name/os_password/os_project_name:
+# os_application_credential_id     = "TU_APP_CRED_ID"
+# os_application_credential_secret = "TU_APP_CRED_SECRET"
+
 # Región del centro de datos
 os_region           = "RegionOne"
 
@@ -30,6 +36,8 @@ os_region           = "RegionOne"
 # 2. Parámetros de la Infraestructura
 # ------------------------------------------------------------------------------
 # Nombre de la clave SSH cargada previamente en OpenStack (Key Pairs)
+# IMPORTANTE: Este keypair DEBE existir en OpenStack antes de hacer 'terraform apply'
+# Se crea en Horizon: Project > Compute > Key Pairs > Import/Create Key Pair
 keypair_name          = "Lab_project"
 
 # Nombre de la red pública para asignación de Floating IPs
@@ -43,10 +51,3 @@ flavor_name           = "ephym_small_2"
 
 # Prefijo identificativo para los recursos del proyecto (evita colisiones)
 project_prefix        = "cantabrico"
-
-# ------------------------------------------------------------------------------
-# 3. Red y Acceso Externo
-# ------------------------------------------------------------------------------
-# IP flotante preexistente en Horizon (Red -> IPs flotantes) asignada al Bastión.
-# Permite asociar una dirección sin solicitar reservas nuevas (evita OverQuota).
-bastion_floating_ip   = "156.35.95.100"
