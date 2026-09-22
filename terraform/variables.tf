@@ -70,7 +70,7 @@ variable "external_network_name" {
 variable "image_name" {
   description = "Nombre de la imagen base (con soporte de seguridad activo)"
   type        = string
-  default     = "Ubuntu-22.04"
+  default     = "Ubuntu-26.04"
 }
 
 variable "flavor_name" {
