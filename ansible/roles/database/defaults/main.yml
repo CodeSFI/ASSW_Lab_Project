@@ -1,0 +1,13 @@
+---
+# Variables del rol database (rutas/valores específicos de la capa de datos).
+
+# Versión principal de PostgreSQL instalada por defecto en la imagen Ubuntu-22.04
+postgresql_version: "14"
+
+# IP fija de la interfaz de data-net (10.10.30.0/24). El servidor escuchara
+# SOLO en esta direccion (red aislada, sin gateway, exclusiva de apps+db).
+database_data_ip: "10.10.30.50"
+
+# Rango desde el que se aceptan conexiones de la aplicacion. Los app_nodes
+# alcanzan la DB por la red de datos (interfaces 10.10.30.11/.12).
+database_app_network: "10.10.30.0/24"
