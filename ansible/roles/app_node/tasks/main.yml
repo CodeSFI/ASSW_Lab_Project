@@ -1,0 +1,50 @@
+---
+# Rol: app_node
+# Objetivo (Semana 1): desplegar el mock HTTP de la API de e-commerce en
+# los nodos de aplicacion, escuchando en {{ app_http_port }} y exponiendo
+# /health para que el balanceador compruebe la disponibilidad.
+#
+# El mock se ejecuta como un proceso sistema (systemd) bajo el usuario
+# dedicado sin privilegios. El empaquetado en contenedor Podman rootless
+# queda recogido como evolucion futura en el Plan de Fran.
+
+- name: Instalar Python y herramientas minimas
+  ansible.builtin.apt:
+    name:
+      - python3
+      - curl
+    state: present
+    update_cache: true
+
+- name: Crear usuario de sistema para el mock (sin login)
+  ansible.builtin.user:
+    name: "{{ mock_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ mock_home }}"
+    create_home: true
+
+- name: Desplegar codigo del mock API
+  ansible.builtin.copy:
+    src: mock_api.py
+    dest: "{{ mock_home }}/mock_api.py"
+    owner: "{{ mock_user }}"
+    group: "{{ mock_user }}"
+    mode: "0644"
+  notify: restart mock-app
+
+- name: Desplegar unidad systemd del mock
+  ansible.builtin.template:
+    src: mock-app.service.j2
+    dest: /etc/systemd/system/mock-app.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart mock-app
+
+- name: Habilitar y arrancar el servicio del mock
+  ansible.builtin.systemd:
+    name: mock-app.service
+    enabled: true
+    state: started
+    daemon_reload: true

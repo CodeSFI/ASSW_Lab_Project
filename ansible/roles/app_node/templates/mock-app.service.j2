@@ -1,0 +1,16 @@
+[Unit]
+Description=Mock API e-commerce (role app_node)
+After=network.target
+
+[Service]
+Type=simple
+User={{ mock_user }}
+Group={{ mock_user }}
+WorkingDirectory={{ mock_home }}
+ExecStart=/usr/bin/python3 {{ mock_home }}/mock_api.py {{ app_http_port }}
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
