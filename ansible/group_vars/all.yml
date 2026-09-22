@@ -1,0 +1,14 @@
+---
+# Variables no sensibles. Los valores reales de contraseñas/secretos
+# se referencian desde group_vars/vault.yml (cifrado con Ansible Vault).
+
+ecommerce_db_name: ecommerce
+ecommerce_db_user: db_ecommerce
+ecommerce_db_password: "{{ vault_ecommerce_db_password }}"
+
+gpg_backup_passphrase: "{{ vault_gpg_backup_passphrase }}"
+backup_dir: /var/backups/postgresql
+backup_retention_days: 7
+
+postgresql_port: 5432
+app_http_port: 8080
