@@ -5,8 +5,11 @@ Serves minimal JSON endpoints and a /health probe for the load balancer.
 Intended to run under systemd as an unprivileged user.
 """
 import json
+import socket
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+HOSTNAME = socket.gethostname()
 
 PRODUCTS = [
     {"id": 1, "name": "Camiseta basica", "price": 12.99},
@@ -29,9 +32,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?", 1)[0]
         if path == "/health":
-            send_json(self, {"status": "ok", "service": "mock-ecommerce"})
+            send_json(self, {"status": "ok", "service": "mock-ecommerce", "host": HOSTNAME})
         elif path == "/products":
-            send_json(self, {"products": PRODUCTS})
+            send_json(self, {"host": HOSTNAME, "products": PRODUCTS})
         elif path.startswith("/products/"):
             product_id = path.rsplit("/", 1)[-1]
             try:

@@ -1,0 +1,15 @@
+# Instalar ansible
+
+## Crear entorno
+python3 -m venv ansible-env
+
+## Acceder al entorno
+### En GNU-Linux
+source ansible-env/bin/activate
+### En Windows
+./ansible-env/Scripts/activate
+
+## Instalar
+pip install "ansible>=2.15"
+
+ansible-galaxy collection install -r requirements.yml
