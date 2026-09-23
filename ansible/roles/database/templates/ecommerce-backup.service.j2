@@ -1,0 +1,9 @@
+[Unit]
+Description=Backup cifrado GPG de {{ ecommerce_db_name }}
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=postgres
+Group=postgres
+ExecStart=/usr/local/bin/backup_ecommerce.sh

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Suministrado por Ansible (rol database). No editar manualmente.
+# Backup cifrado GPG (AES-256) de la base {{ ecommerce_db_name }} con retencion.
+set -euo pipefail
+
+DB_NAME="{{ ecommerce_db_name }}"
+BACKUP_DIR="{{ backup_dir }}"
+RETENTION={{ backup_retention_days }}
+PASSPHRASE="{{ gpg_backup_passphrase }}"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+OUT_FILE="${BACKUP_DIR}/${DB_NAME}-${STAMP}.sql.gz.gpg"
+
+pg_dump -U postgres "${DB_NAME}" | gzip | gpg --batch --yes --pinentry-mode loopback \
+    --passphrase "${PASSPHRASE}" --symmetric --cipher-algo AES256 -o "${OUT_FILE}"
+
+find "${BACKUP_DIR}" -type f -name "${DB_NAME}-*.sql.gz.gpg" -mtime "+${RETENTION}" -delete

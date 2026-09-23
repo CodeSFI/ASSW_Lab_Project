@@ -1,0 +1,16 @@
+---
+# Playbook maestro de suministro de la infraestructura.
+# Aplica por capas: datos -> aplicacion. Ejecutar desde el directorio ansible/:
+#   ansible-playbook -i inventory.ini site.yml --ask-vault-pass
+
+- name: Suministro de la capa de datos (PostgreSQL)
+  hosts: db
+  become: true
+  roles:
+    - role: database
+
+- name: Suministro de la capa de aplicacion (mock API)
+  hosts: app
+  become: true
+  roles:
+    - role: app_node

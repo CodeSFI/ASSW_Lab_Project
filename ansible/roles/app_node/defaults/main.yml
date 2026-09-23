@@ -1,0 +1,9 @@
+---
+# Variables del rol app_node (valores de la capa de aplicacion).
+
+# Puerto donde escucha el mock API (el LB balancea a este puerto en app-net).
+app_http_port: 8080
+
+# Usuario del sistema ejecutor del mock (minimos privilegios).
+mock_user: mockapp
+mock_home: /opt/mock-ecommerce

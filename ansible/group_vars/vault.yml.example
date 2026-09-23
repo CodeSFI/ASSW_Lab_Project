@@ -1,0 +1,13 @@
+---
+# Secretos del proyecto. NO COMMITEAR ESTE FICHERO EN CLARO.
+# Antes de commit, cifrar con:
+#   ansible-vault encrypt group_vars/vault.yml
+# La clave de vault NO debe vivir en el repo: usar
+#   ANSIBLE_VAULT_PASSWORD_FILE=~/.ansible_vault_pass_cantabrico (fuera de git)
+#
+# Valores generados para el lab. Ejecutar el playbook con --ask-vault-pass
+# o dejar configurado vault_password_file en ansible.cfg.
+
+vault_db_root_password: "TU PASSWORD"
+vault_ecommerce_db_password: "TU PASSWORD""
+vault_gpg_backup_passphrase: "TU PASSWORD""

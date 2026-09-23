@@ -1,0 +1,92 @@
+---
+# Rol: database
+# Objetivo (Semana 2): desplegar PostgreSQL en srv-db-core01, escuchando
+# únicamente en la interfaz de data-net (10.10.30.0/24), crear la base de
+# datos/usuario {{ ecommerce_db_name }}/{{ ecommerce_db_user }}, y configurar
+# el backup periodico cifrado con GPG.
+#
+# NOTA: pg_hba permite las conexiones desde database_app_network (data-net),
+# que es el enlace real Apps <-> DB. El comentario inicial de tarea citaba
+# la app_subnet (10.10.20.0/24), pero los app_nodes no enrutan por esa red
+# hacia la base de datos.
+
+- name: Instalar PostgreSQL, dependencias de Ansible y GPG
+  ansible.builtin.apt:
+    name:
+      - postgresql
+      - postgresql-contrib
+      - python3-psycopg2
+      - gpg
+    state: present
+    update_cache: true
+
+- name: Plantillar configuracion de escucha (conf.d drop-in)
+  ansible.builtin.template:
+    src: conf.d-supply.conf.j2
+    dest: "/etc/postgresql/{{ postgresql_version }}/main/conf.d/supply.conf"
+    owner: postgres
+    group: postgres
+    mode: "0644"
+  notify: restart postgresql
+
+- name: Plantillar pg_hba.conf restringido a la red de datos
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: "/etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf"
+    owner: postgres
+    group: postgres
+    mode: "0640"
+  notify: restart postgresql
+
+- name: Garantizar rol de la aplicacion
+  community.postgresql.postgresql_user:
+    name: "{{ ecommerce_db_user }}"
+    password: "{{ ecommerce_db_password }}"
+  become: true
+  become_user: postgres
+
+- name: Crear base de datos de la aplicacion
+  community.postgresql.postgresql_db:
+    name: "{{ ecommerce_db_name }}"
+    owner: "{{ ecommerce_db_user }}"
+  become: true
+  become_user: postgres
+
+- name: Crear directorio de backups
+  ansible.builtin.file:
+    path: "{{ backup_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0750"
+
+- name: Desplegar script de backup cifrado con GPG
+  ansible.builtin.template:
+    src: backup_ecommerce.sh.j2
+    dest: /usr/local/bin/backup_ecommerce.sh
+    owner: postgres
+    group: postgres
+    mode: "0700"
+
+- name: Desplegar unidad systemd del backup (oneshot)
+  ansible.builtin.template:
+    src: ecommerce-backup.service.j2
+    dest: /etc/systemd/system/ecommerce-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Desplegar timer systemd del backup (diario)
+  ansible.builtin.template:
+    src: ecommerce-backup.timer.j2
+    dest: /etc/systemd/system/ecommerce-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Habilitar y arrancar el timer de backup
+  ansible.builtin.systemd:
+    name: ecommerce-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

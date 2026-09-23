@@ -1,0 +1,6 @@
+---
+# Colecciones requeridas para el suministro.
+# Instalar antes de ejecutar el playbook:
+#   ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: community.postgresql

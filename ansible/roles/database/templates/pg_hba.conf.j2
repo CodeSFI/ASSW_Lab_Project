@@ -1,0 +1,9 @@
+# Suministrado por Ansible (rol database). No editar manualmente.
+# PostgreSQL Client Authentication Configuration File
+# ------------------------------------------------
+local   all             postgres                                peer
+local   all             all                                     peer
+host    all             all             127.0.0.1/32            scram-sha-256
+host    all             all             ::1/128                 scram-sha-256
+# Aplicaciones (app_nodes) por la red de datos exclusiva
+host    {{ ecommerce_db_name }}  {{ ecommerce_db_user }}  {{ database_app_network }}  scram-sha-256
