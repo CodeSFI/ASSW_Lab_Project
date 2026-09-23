@@ -78,12 +78,20 @@ tráfico administrativo salta por él:
 Tu PC ──SSH(22)──► bastión 156.35.98.87 ──SSH(22)──► app-node 10.10.99.21
 ```
 
-Eso lo configura `ansible.cfg`:
+Eso lo configura el **salto por bastión** en `group_vars/all.yml` (no en `ansible.cfg`,
+que se lee sin expansión de variables y no admite la IP dinámicamente):
+
+```yaml
+# ansible/group_vars/all.yml
+bastion_fip: 156.35.98.87                # IP flotante del bastión
+ansible_ssh_common_args: '-o ProxyCommand="ssh -W %h:%p {{ ansible_user }}@{{ bastion_fip }}"'
+```
+
+`ansible.cfg` queda sin IP (el ProxyCommand y su argumento llegan por la connection var,
+que tiene mayor precedencia que el fichero y se templatiza con Jinja en runtime):
 
 ```ini
 [ssh_connection]
-ssh_args = -o ProxyCommand="ssh -W %h:%p sysadmin_cantabrico@156.35.98.87" \
-           -o StrictHostKeyChecking=no
 pipelining = True
 ```
 
@@ -92,6 +100,10 @@ pipelining = True
 - El usuario es `sysadmin_cantabrico` en todos los nodos (`remote_user` y vars
   de grupo en el inventory).
 - `pipelining = True` reduce rondas SSH en playbooks con muchos pasos.
+
+> **Cuando cambie la FIP del bastión** (p. ej. tras recrear la infra con Terraform):
+> editar `bastion_fip` en `group_vars/all.yml`, o sobrescribirla sin tocar ficheros:
+> `ansible-playbook ... -e bastion_fip=<nueva-IP>`.
 
 ---
 
