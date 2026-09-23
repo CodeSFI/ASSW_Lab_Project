@@ -4,4 +4,6 @@ terraform/.terraform*
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 **/ansible-env/**
+**/wsl-ansible-env/**
+**/vault.yml
 *.sh

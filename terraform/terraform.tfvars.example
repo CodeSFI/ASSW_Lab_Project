@@ -44,7 +44,7 @@ keypair_name          = "Lab_project"
 external_network_name = "public"
 
 # Nombre de la imagen base de SO registrada en Glance
-image_name            = "Ubuntu-22.04"
+image_name            = "Ubuntu-26.04"
 
 # Sabor de cómputo para las instancias (ajustado a cuota de laboratorio)
 flavor_name           = "ephym_small_2"
