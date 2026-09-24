@@ -48,6 +48,8 @@ head -c 15 group_vars/vault.yml    # debe mostrar: $ANSIBLE_VAULT;1.1
 ### 0.4 Verificar conectividad (debe dar pong en los 3 nodos)
 ```bash
 cd ansible
+<!--Si lo haces desde WSL puede que haya que ejecutar esto antes-->
+export ANSIBLE_CONFIG=$PATH/ASSW_Lab_Project/ansible/ansible.cfg
 ansible all -m ping
 ansible db -m ping
 ```

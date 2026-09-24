@@ -15,7 +15,7 @@ app_http_port: 8080
 
 # IP flotante (FIP) del bastión. Cambia si se recrea la infra con Terraform;
 # es la única puerta SSH pública y el ancla de todos los ProxyCommand.
-bastion_fip: 156.35.98.163
+bastion_fip: 156.35.98.87
 
 # Salto SSH: PC --SSH(22)--> bastión(FIP) --SSH(22)--> nodo interno (IP MGMT).
 # Al ser una connection var se templatiza: {{ bastion_fip }} se resuelve en runtime.

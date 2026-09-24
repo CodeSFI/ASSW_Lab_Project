@@ -311,12 +311,77 @@ resource "openstack_compute_instance_v2" "db_core" {
 # ==============================================================================
 
 # Consulta el DataSource de la IP existente indicada en la variable
-data "openstack_networking_floatingip_v2" "fip_bastion" {
-  address = var.bastion_floating_ip
-}
+#data "openstack_networking_floatingip_v2" "fip_bastion" {
+#  address = var.bastion_floating_ip
+#}
 
 # Asocia la IP pública al puerto de la interfaz de gestión del Bastión
 resource "openstack_networking_floatingip_associate_v2" "fip_bastion_assoc" {
-  floating_ip = data.openstack_networking_floatingip_v2.fip_bastion.address
+  floating_ip = var.bastion_floating_ip
   port_id     = openstack_networking_port_v2.port_bastion_mgmt.id
+}
+
+# ==============================================================================
+# OUTPUTS DE VERIFICACIÓN DE INSTANCIAS
+# ==============================================================================
+
+output "instances_summary" {
+  description = "Resumen de todas las VMs creadas con sus IPs principales"
+  value = {
+    lb_proxy = {
+      id          = openstack_compute_instance_v2.lb_proxy.id
+      name        = openstack_compute_instance_v2.lb_proxy.name
+      status      = openstack_compute_instance_v2.lb_proxy.power_state
+      dmz_ip      = "10.10.10.10"
+      mgmt_ip     = "10.10.99.10"
+    }
+    bastion = {
+      id          = openstack_compute_instance_v2.bastion.id
+      name        = openstack_compute_instance_v2.bastion.name
+      status      = openstack_compute_instance_v2.bastion.power_state
+      mgmt_ip     = "10.10.99.20"
+      floating_ip = var.bastion_floating_ip
+    }
+    app_node_01 = {
+      id          = openstack_compute_instance_v2.app_node_01.id
+      name        = openstack_compute_instance_v2.app_node_01.name
+      status      = openstack_compute_instance_v2.app_node_01.power_state
+      app_ip      = "10.10.20.11"
+      data_ip     = "10.10.30.11"
+      mgmt_ip     = "10.10.99.21"
+    }
+    app_node_02 = {
+      id          = openstack_compute_instance_v2.app_node_02.id
+      name        = openstack_compute_instance_v2.app_node_02.name
+      status      = openstack_compute_instance_v2.app_node_02.power_state
+      app_ip      = "10.10.20.12"
+      data_ip     = "10.10.30.12"
+      mgmt_ip     = "10.10.99.22"
+    }
+    db_core = {
+      id          = openstack_compute_instance_v2.db_core.id
+      name        = openstack_compute_instance_v2.db_core.name
+      status      = openstack_compute_instance_v2.db_core.power_state
+      data_ip     = "10.10.30.50"
+      mgmt_ip     = "10.10.99.50"
+    }
+  }
+}
+
+# Output rápido solo de la IP flotante del bastión (muy útil)
+output "bastion_floating_ip" {
+  description = "IP pública del Bastión (punto de entrada SSH)"
+  value       = var.bastion_floating_ip
+}
+
+# Output de todas las IPs de gestión (para Ansible inventory)
+output "mgmt_ips" {
+  description = "IPs de gestión de todas las máquinas (útiles para Ansible)"
+  value = {
+    bastion     = "10.10.99.20"
+    lb_proxy    = "10.10.99.10"
+    app_node_01 = "10.10.99.21"
+    app_node_02 = "10.10.99.22"
+    db_core     = "10.10.99.50"
+  }
 }
