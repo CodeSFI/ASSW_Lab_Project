@@ -8,7 +8,7 @@
 # 1. Credenciales y Endpoint de OpenStack (Keystone v3)
 # ------------------------------------------------------------------------------
 # URL del servicio Keystone (reemplazar la IP si el nodo maestro cambia)
-os_auth_url         = "http://156.35.95.9:5000/v3"
+os_auth_url         = "http://156.35.98.153:5000/v3"
 
 # OPCIÓN A: Autenticación con usuario/contraseña (tradicional)
 # Identificador de usuario de la Universidad (ej. UOXXXXXX)
