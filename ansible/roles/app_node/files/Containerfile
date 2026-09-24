@@ -1,0 +1,20 @@
+# Containerfile - imagen del mock API e-commerce (rol app_node).
+# Se construye en el propio nodo con Podman rootless durante el suministro.
+FROM docker.io/library/python:3.11-slim
+
+LABEL org.opencontainers.image.title="mock-ecommerce" \
+      org.opencontainers.image.description="Mock HTTP API de e-commerce con acceso a PostgreSQL" \
+      org.opencontainers.image.version="1.1.0"
+
+# psycopg2-binary: wheel binario, no requiere compilador en el build.
+RUN pip install --no-cache-dir psycopg2-binary==2.9.9
+
+WORKDIR /app
+COPY mock_api.py .
+
+# Usuario sin privilegios del contenedor (nobody, uid 65534). El puerto 8080
+# es no privilegiado, asi que no hace falta mapear UIDs dentro del contenedor.
+USER nobody
+
+EXPOSE 8080
+CMD ["python3", "mock_api.py"]

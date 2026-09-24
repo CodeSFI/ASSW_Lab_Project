@@ -1,16 +1,44 @@
 [Unit]
-Description=Mock API e-commerce (role app_node)
-After=network.target
+Description=Mock API e-commerce (role app_node) - contenedor Podman rootless
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User={{ mock_user }}
 Group={{ mock_user }}
-WorkingDirectory={{ mock_home }}
-ExecStart=/usr/bin/python3 {{ mock_home }}/mock_api.py {{ app_http_port }}
+# HOME debe apuntar al directorio del mock para que Podman use su almacen y
+# configuracion propios (~/.config, ~/.local/share/containers).
+Environment=HOME={{ mock_home }}
+# XDG_RUNTIME_DIR para el arranque de Podman rootless; systemd crea el
+# directorio (RuntimeDirectory=) propiedad del usuario {{ mock_user }}.
+Environment=XDG_RUNTIME_DIR=/run/{{ mock_runtime_dir_name }}
+RuntimeDirectory={{ mock_runtime_dir_name }}
+RuntimeDirectoryMode=0700
+
+# Limpieza de un contenedor previo (ignora el error si no existe todavia).
+ExecStartPre=-/usr/bin/podman rm -f {{ mock_container_name }}
+
+# Arranque del contenedor rootless:
+#  - publica {{ app_http_port }} en el host (el balanceador balancea a este
+#    puerto); por red se limita con el SG app_http_from_dmz.
+#  - --cgroups=disabled evita exigir delegacion de cgroups al sistema (no
+#    hay sesion de usuario con linger; suficiente para un contenedor).
+#  - --env-file inyecta configuracion + secretos de la BD (0600).
+ExecStart=/usr/bin/podman run \
+    --name {{ mock_container_name }} \
+    --rm \
+    --cgroups=disabled \
+    -p {{ app_http_port }}:{{ app_http_port }} \
+    --env-file {{ mock_home }}/mock-app.env \
+    --hostname {{ ansible_hostname | default(inventory_hostname) }} \
+    {{ mock_image_name }}:{{ mock_image_tag }}
+
+ExecStop=-/usr/bin/podman stop -t 10 {{ mock_container_name }}
+
 Restart=on-failure
-RestartSec=3
-NoNewPrivileges=true
+RestartSec=5
+TimeoutStartSec=180
 
 [Install]
 WantedBy=multi-user.target
