@@ -1,0 +1,40 @@
+---
+# Rol: perimeter_lb
+# Objetivo (Integrante 2): convertir lb-proxy-cantabrico-01 en el punto de
+# entrada unico del perimetro:
+#   S1 · Nginx como proxy inverso + balanceador hacia los app-nodes.
+#   S2 · ModSecurity + OWASP CRS, TLS autofirmado con endurecimiento SSL y
+#       politicas de rate limiting.
+#   S3 · Health-checks pasivos (max_fails/fail_timeout) + verificacion.
+
+- name: "Instalar paquetes del perimetro"
+  ansible.builtin.apt:
+    name: "{{ perimeter_apt_packages }}"
+    state: present
+    update_cache: true
+
+- name: "Arrancar y habilitar nginx"
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: "Desplegar nginx.conf principal"
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    mode: "0644"
+  notify: reload nginx
+
+- name: "Desplegar sitio ecommerce (upstreams + balanceo)"
+  ansible.builtin.template:
+    src: ecommerce.conf.j2
+    dest: /etc/nginx/conf.d/ecommerce.conf
+    mode: "0644"
+  notify: reload nginx
+
+- name: "Validar sintaxis de la configuracion"
+  ansible.builtin.command: nginx -t
+  register: nginx_test
+  changed_when: false
+  failed_when: nginx_test.rc != 0
