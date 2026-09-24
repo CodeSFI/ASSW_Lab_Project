@@ -1,0 +1,31 @@
+---
+# Variables del rol perimeter_lb (capa perimetral, Integrante 2).
+
+# --- Semana 1 · Nginx: proxy inverso + balanceador ---------------------------
+nginx_listen_http_port: 80
+nginx_listen_https_port: 443
+
+# Metodo de balanceo: round_robin (alterna A/B, facil de verificar) | least_conn
+lb_method: round_robin
+
+# Backends: nodos de aplicacion (red de aplicacion 10.10.20.0/24).
+perimeter_app_backends:
+  - "10.10.20.11"
+  - "10.10.20.12"
+
+# Puerto donde escucha el mock en los backends (definido en all.yml).
+app_backend_port: "{{ app_http_port }}"
+
+# Health-checks pasivos de Nginx (open source): tras max_fails errores
+# consecutivos un nodo se retira del pool durante fail_timeout segundos.
+lb_max_fails: 3
+lb_fail_timeout: 10
+lb_proxy_connect_timeout: 2
+lb_proxy_read_timeout: 10
+lb_proxy_next_upstream: error timeout invalid_header http_500 http_502 http_503 http_504
+
+# Paquetes base (S1). En S2 se amplian con las dependencias de ModSecurity.
+perimeter_apt_packages:
+  - nginx
+  - curl
+  - openssl

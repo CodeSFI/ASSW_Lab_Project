@@ -14,3 +14,9 @@
   become: true
   roles:
     - role: app_node
+
+- name: Suministro del perimetro (Nginx + WAF ModSecurity)
+  hosts: lb
+  become: true
+  roles:
+    - role: perimeter_lb
