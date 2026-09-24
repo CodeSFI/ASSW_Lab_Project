@@ -322,6 +322,16 @@ resource "openstack_networking_floatingip_associate_v2" "fip_bastion_assoc" {
 }
 
 # ==============================================================================
+# ASIGNACIÓN DE IP FLOTANTE PREEXISTENTE PARAMETRIZADA (BASTIÓN)
+# ==============================================================================
+
+# Asocia la IP pública al puerto de la interfaz de gestión del load-balancer (lb)
+resource "openstack_networking_floatingip_associate_v2" "fip_lb_assoc" {
+  floating_ip = var.lb_floating_ip
+  port_id     = openstack_networking_port_v2.port_lb_dmz.id
+}
+
+# ==============================================================================
 # OUTPUTS DE VERIFICACIÓN DE INSTANCIAS
 # ==============================================================================
 

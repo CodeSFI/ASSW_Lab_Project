@@ -95,3 +95,8 @@ variable "bastion_floating_ip" {
   description = "Direccion IP flotante preexistente en Horizon para el Bastion"
   type        = string
 }
+
+variable "lb_floating_ip" {
+  description = "Direccion IP flotante preexistente en Horizon para el Load-Balancer"
+  type        = string
+}
