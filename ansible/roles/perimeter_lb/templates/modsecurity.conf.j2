@@ -1,0 +1,24 @@
+# Configuracion base del motor ModSecurity (desplegada por rol perimeter_lb).
+# Sustituto del fichero /etc/modsecurity/modsecurity.conf (ya no lo empaqueta
+# libmodsecurity3 en Ubuntu 26.04). SecRuleEngine se ajusta despues con el rol.
+SecRuleEngine DetectionOnly
+
+SecRequestBodyAccess On
+SecRequestBodyLimit 13107200
+SecRequestBodyNoFilesLimit 131072
+SecResponseBodyAccess Off
+SecResponseBodyMimeType text/plain text/html text/xml application/json
+
+SecAuditEngine RelevantOnly
+SecAuditLogRelevantStatus "^(?:5|4(?!04))"
+SecAuditLogParts ABIJDEFHZ
+SecAuditLogType Serial
+# NOTA: con libmodsecurity 3.0.14 el fichero de auditoria puede quedar vacio
+# (regresion upstream SharedFiles, SpiderLabs/ModSecurity#3402). La auditoria
+# de los bloqueos se registra igualmente en el error.log de nginx.
+SecAuditLog /var/log/nginx/modsec_audit.log
+
+SecArgumentSeparator &
+SecCookieFormat 0
+SecTmpDir /tmp
+SecDataDir /tmp

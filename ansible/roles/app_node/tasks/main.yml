@@ -30,7 +30,7 @@
     dest: "{{ mock_home }}/mock_api.py"
     owner: "{{ mock_user }}"
     group: "{{ mock_user }}"
-    mode: "0644"
+    mode: "0600"
   notify: restart mock-app
 
 - name: Desplegar unidad systemd del mock
@@ -39,7 +39,7 @@
     dest: /etc/systemd/system/mock-app.service
     owner: root
     group: root
-    mode: "0644"
+    mode: "0600"
   notify: restart mock-app
 
 - name: Habilitar y arrancar el servicio del mock
@@ -48,3 +48,45 @@
     enabled: true
     state: started
     daemon_reload: true
+
+# --- Red multihomed: evitar doble ruta por defecto (ECMP) --------------------
+# App y MGMT están conectadas al router, así que DHCP instala dos rutas por
+# defecto con métrica 100 en cada nodo. El kernel reparte tráfico entre ambos
+# gateways (ECMP) y el ~50% del tráfico hacia el LB sale por la interfaz de
+# gestión (anti-spoofing/sg lo descarta). Este bloque anula la ruta por defecto
+# de la interfaz MGMT: el tráfico de servicio sale SIEMPRE por la red de
+# aplicación (ens3/10.10.20.0/24) y MGMT queda solo como plano de gestión on-link.
+- name: "Identificar la interfaz de gestión (10.10.99.0/24)"
+  ansible.builtin.set_fact:
+    mgmt_iface: "{{ item }}"
+  loop: "{{ ansible_facts.interfaces }}"
+  when:
+    - mgmt_iface is not defined
+    - ansible_facts[item] is defined
+    - ansible_facts[item].ipv4 is defined
+    - ansible_facts[item].ipv4.address is defined
+    - ansible_facts[item].ipv4.address is match('^10\.10\.99\.')
+
+- name: "Netplan: la interfaz de gestión no instala ruta por defecto"
+  ansible.builtin.copy:
+    dest: /etc/netplan/99-mgmt-no-default.yaml
+    content: |
+      network:
+        version: 2
+        renderer: networkd
+        ethernets:
+          {{ mgmt_iface }}:
+            dhcp4: true
+            dhcp4-overrides:
+              use-routes: false
+    owner: root
+    group: root
+    mode: "0600"
+  when: mgmt_iface is defined
+  register: mgmt_netplan
+
+- name: "Aplicar netplan (interfaz de gestión)"
+  ansible.builtin.command: netplan apply
+  when:
+    - mgmt_netplan is defined
+    - mgmt_netplan.changed

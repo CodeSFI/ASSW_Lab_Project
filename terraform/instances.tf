@@ -321,6 +321,11 @@ resource "openstack_networking_floatingip_associate_v2" "fip_bastion_assoc" {
   port_id     = openstack_networking_port_v2.port_bastion_mgmt.id
 }
 
+resource "openstack_networking_floatingip_associate_v2" "fip_lb_assoc" {
+  floating_ip = var.lb_floating_ip
+  port_id     = openstack_networking_port_v2.port_lb_dmz.id
+}
+
 # ==============================================================================
 # OUTPUTS DE VERIFICACIÓN DE INSTANCIAS
 # ==============================================================================

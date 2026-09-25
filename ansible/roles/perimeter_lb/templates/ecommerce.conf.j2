@@ -1,7 +1,11 @@
-# ecommerce.conf — Perimetro (Integrante 2) — VERSION S1 (sin TLS/WAF)
+# ecommerce.conf — Perimetro (Integrante 2) — VERSION FINAL
+# Proxy inverso + balanceador + TLS + WAF (ModSecurity) + rate limiting.
 # Gestionado por Ansible (rol perimeter_lb); NO editar a mano.
 
-# Pool de backends: nodos de aplicacion (app-net).
+# Zona de rate limiting (contexto http): por IP de origen.
+limit_req_zone $binary_remote_addr zone={{ rate_limit_zone_name }}:{{ rate_limit_zone_size }} rate={{ rate_limit_rps }}r/s;
+
+# Pool de backends: nodos de aplicacion (app-net 10.10.20.0/24).
 # Health-checks pasivos: max_fails + fail_timeout retiran nodos caidos.
 upstream ecommerce_backend {
 {% if lb_method == 'least_conn' %}
@@ -13,10 +17,44 @@ upstream ecommerce_backend {
     keepalive 32;
 }
 
+# -----------------------------------------------------------------------------
+# Puerto 80: SOLO redireccion permanente a HTTPS (nunca se sirve en claro).
+# -----------------------------------------------------------------------------
 server {
     listen {{ nginx_listen_http_port }};
     listen [::]:{{ nginx_listen_http_port }};
     server_name _;
+    return 301 https://$host$request_uri;
+}
+
+# -----------------------------------------------------------------------------
+# Puerto 443: terminacion TLS + WAF + rate limiting + proxy al pool.
+# -----------------------------------------------------------------------------
+server {
+    listen {{ nginx_listen_https_port }} ssl;
+    listen [::]:{{ nginx_listen_https_port }} ssl;
+    http2 on;                 # requiere nginx >= 1.25.1 (Ubuntu 26.04 OK)
+    server_name _;
+
+    # --- TLS (certificado autofirmado generado por el rol) ---
+    ssl_certificate     {{ tls_cert_dir }}/cantabrico.crt;
+    ssl_certificate_key {{ tls_cert_dir }}/cantabrico.key;
+    ssl_protocols       {{ tls_protocols }};
+    ssl_ciphers         "{{ tls_ciphers }}";
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache   {{ tls_session_cache }};
+    ssl_session_timeout {{ tls_session_timeout }};
+
+    # --- WAF: ModSecurity-nginx + OWASP CRS ---
+    modsecurity on;
+    modsecurity_rules_file {{ modsec_dir }}/modsecurity.conf;
+
+    # --- Cabeceras de endurecimiento ---
+    add_header Strict-Transport-Security "max-age={{ hsts_max_age }}; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'" always;
 
     # Sonda de disponibilidad del propio balanceador.
     location = /healthz {
@@ -25,8 +63,18 @@ server {
         return 200 "LB OK\n";
     }
 
-    # Proxy inverso + balanceo hacia el pool.
+    # Estadisticas del pool (solo local o desde la red de gestion).
+    location = /nginx_status {
+        stub_status;
+        allow 127.0.0.1;
+        allow {{ mgmt_net_cidr }};
+        deny all;
+    }
+
+    # Proxy inverso + rate limiting hacia el pool ecommerce.
     location / {
+        limit_req zone={{ rate_limit_zone_name }} burst={{ rate_limit_burst }} nodelay;
+
         proxy_pass http://ecommerce_backend;
         proxy_http_version 1.1;
         proxy_set_header Connection "";

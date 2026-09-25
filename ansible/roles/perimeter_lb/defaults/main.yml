@@ -24,8 +24,56 @@ lb_proxy_connect_timeout: 2
 lb_proxy_read_timeout: 10
 lb_proxy_next_upstream: error timeout invalid_header http_500 http_502 http_503 http_504
 
-# Paquetes base (S1). En S2 se amplian con las dependencias de ModSecurity.
+# --- Semana 2 · TLS ----------------------------------------------------------
+tls_cert_dir: /etc/nginx/ssl
+tls_cert_cn: lb-proxy-cantabrico-01
+tls_cert_days: 365
+# SAN: CN + IP de la DMZ + (si esta definida) la FIP publica del balanceador.
+tls_san: "DNS:{{ tls_cert_cn }},IP:{{ lb_dmz_ip }}{{ ',IP:' ~ lb_fip if lb_fip | default('') | length > 0 else '' }}"
+tls_protocols: "TLSv1.2 TLSv1.3"
+# Ciphers seguros (nivel 'intermedio' de Mozilla); sin TLSv1.0/1.1, RC4, 3DES.
+tls_ciphers: >-
+  ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:
+  ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:
+  ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:
+  DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
+tls_session_cache: "shared:SSL:10m"
+tls_session_timeout: 10m
+hsts_max_age: 63072000        # 2 anos, con includeSubDomains
+
+# --- Semana 2 · Rate limiting -----------------------------------------------
+rate_limit_zone_name: ecommerce
+rate_limit_zone_size: 10m
+rate_limit_rps: 10            # peticiones/segundo permitidas por IP
+rate_limit_burst: 20          # rafaga admitida por encima de la tasa
+
+# --- Semana 2 · ModSecurity + OWASP CRS --------------------------------------
+modsec_rule_engine: "On"                 # On (bloquea) | DetectionOnly (solo registra)
+modsec_dir: /etc/nginx/modsecurity
+modsec_load_conf: /etc/nginx/modules-enabled/50-modsecurity.conf
+modsec_module_path: /etc/nginx/modules/ngx_http_modsecurity_module.so
+modsec_audit_log: /var/log/nginx/modsec_audit.log
+modsec_connector_repo: https://github.com/owasp-modsecurity/ModSecurity-nginx.git
+modsec_connector_dir: /usr/local/src/ModSecurity-nginx
+modsec_src_dir: /usr/local/src
+crs_git_url: https://github.com/coreruleset/coreruleset.git
+crs_git_version: v4.0.0       # version fijada (reproducible); se puede subir
+modsec_crs_dir: /etc/nginx/modsecurity/owasp-crs
+mgmt_net_cidr: "10.10.99.0/24"
+
+# IP fija del balanceador en dmz-net (para el SAN del certificado).
+lb_dmz_ip: "10.10.10.10"
+
+# Paquetes: S1 + dependencias para compilar el conector ModSecurity-nginx.
 perimeter_apt_packages:
   - nginx
+  - build-essential
+  - pkg-config
+  - libpcre2-dev
+  - zlib1g-dev
+  - libssl-dev
+  - libmodsecurity3
+  - libmodsecurity-dev
+  - git
   - curl
   - openssl
