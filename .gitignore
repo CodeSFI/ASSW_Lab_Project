@@ -7,3 +7,4 @@ terraform/terraform.tfstate.backup
 **/wsl-ansible-env/**
 **/vault.yml
 *.sh
+!scripts/*.sh
