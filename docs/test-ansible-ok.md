@@ -118,12 +118,12 @@ ansible db -m shell -a "ss -ltnp | grep 5432"
 Esperado: `10.10.30.50:5432` como dirección de escucha.
 
 ### T2.4 La app se autentica contra la DB por data-net
-> **⚠︎ BLOQUEANTE conocido**: la regla `db_from_app` (`terraform/security_groups.tf:113`)
-> solo permite 5432 desde `10.10.20.0/24` (app_subnet), pero el tráfico Apps→DB va
-> por data-net (`10.10.30.0/24`). **Hasta que no se corrija ese SG, T2.4 fallará.**
-> Fix propuesto en `security_groups.tf`:
+> ✅ **RESUELTO en `terraform/security_groups.tf`**: la regla `db_from_app` usa
 > `remote_ip_prefix = openstack_networking_subnet_v2.data_subnet.cidr`
-> (el `pg_hba.conf` del rol ya usa el rango de datos).
+> (tráfico Apps→DB por data-net `10.10.30.0/24`, alineada con el `pg_hba.conf`
+> del rol). **Requisito**: aplicar el cambio con `terraform apply` (o corregir la
+> regla a mano en Horizon → Security Groups → `cantabrico-sg-internal` → 5432...
+> → CIDR `10.10.30.0/24`).
 
 Desde un app-node (instala el cliente psql solo para la prueba):
 ```bash
@@ -211,13 +211,13 @@ Esperado: el dump se restaura sin errores y aparecen las tablas/objetos de la BD
 - [ ] T1.1–T1.4: mock activo en `app01`+`app02`, `/health` y `/products` responden e identifican el host (hostname distinto por nodo).
 - [ ] T1.5 + 0.3: `group_vars/vault.yml` cifrado con Vault, sin secretos en claro en git.
 - [ ] T2.2–T2.3: PostgreSQL activo escuchando **solo** en `10.10.30.50`.
-- [ ] T2.4: la app conecta por data-net con `db_ecommerce` (PENDIENTE del fix de SG).
+- [ ] T2.4: la app conecta por data-net con `db_ecommerce` (requiere `terraform apply` del fix de SG).
 - [ ] T2.5: DB inaccesible desde mgmt/exterior.
 - [ ] T2.6–T2.8: backup con cifrado GPG AES-256 funciona a demanda y con timer diario.
 - [ ] T3.1–T3.2: `site.yml` orquesta db + app, 0 fallos.
 - [ ] T3.3: idempotente (`changed=0`).
 - [ ] T3.4: restauración probada sobre BD temporal.
 
-> ⚠︎ Bloqueante pendiente antes de poder marcar T2.4: corregir la regla
-> `db_from_app` del SG para permitir 5432 desde data-net, alineándose con el
-> `pg_hba.conf` del rol. Avisar/coordinar con quien gestione `terraform/security_groups.tf`.
+> ✅ Bloqueante de SG resuelto en `terraform/security_groups.tf`: la regla
+> `db_from_app` permite 5432 desde data-net (`10.10.30.0/24`), alineándose con el
+> `pg_hba.conf` del rol. Aplicar con `terraform apply` cuando se gestione Terraform.

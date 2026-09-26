@@ -1,22 +1,38 @@
 ---
 # Rol: app_node
-# Objetivo (Semana 1): desplegar el mock HTTP de la API de e-commerce en
-# los nodos de aplicacion, escuchando en {{ app_http_port }} y exponiendo
-# /health para que el balanceador compruebe la disponibilidad.
-#
-# El mock se ejecuta como un proceso sistema (systemd) bajo el usuario
-# dedicado sin privilegios. El empaquetado en contenedor Podman rootless
-# queda recogido como evolucion futura en el Plan de Fran.
+# Objetivo: desplegar el mock HTTP de la API de e-commerce en los nodos de
+# aplicacion dentro de un contenedor Podman ROOTLESS, exponiendo
+# {{ app_http_port }} en el host para el balanceador y con acceso real a
+# PostgreSQL por data-net ({{ mock_db_host }}:{{ mock_db_port }}).
 
-- name: Instalar Python y herramientas minimas
+- name: Instalar Podman rootless y herramientas de verificacion
   ansible.builtin.apt:
     name:
-      - python3
-      - curl
+      - podman              # motor de contenedores (rootless)
+      - uidmap              # newuidmap/newgidmap: mapeo de usuarios rootless
+      - slirp4netns         # red NAT por usuario para contenedores rootless
+      - fuse-overlayfs      # storage overlay sin privilegios
+      - curl                # verificacion local de los endpoints
     state: present
     update_cache: true
 
-- name: Crear usuario de sistema para el mock (sin login)
+- name: Garantizar directorio de configuracion de contenedores
+  ansible.builtin.file:
+    path: /etc/containers/containers.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Configurar netavark para no depender de firewalld (SG del proyecto)
+  # Con firewalld instalado pero INACTIVO, netavark se queda bloqueado en su
+  # helper 'firewalld-reload' (proceso colgado indefinidamente) y podman
+  # build/run esperan para siempre. El filtrado de red lo hacen los Security
+  # Groups de OpenStack, asi que no se programan reglas de firewalld en host.
+  ansible.builtin.copy:
+    src: containers-network.conf
+    dest: /etc/containers/containers.conf.d/20-mockapp-firewall-none.conf
+    mode: "0644"
+
+- name: Crear usuario de sistema para el contenedor rootless (sin login)
   ansible.builtin.user:
     name: "{{ mock_user }}"
     system: true
@@ -24,16 +40,182 @@
     home: "{{ mock_home }}"
     create_home: true
 
-- name: Desplegar codigo del mock API
+- name: Registrar rango subuid para el usuario rootless
+  ansible.builtin.lineinfile:
+    path: /etc/subuid
+    regexp: "^{{ mock_user }}:"
+    line: "{{ mock_user }}:{{ mock_subuid_start }}:{{ mock_subuid_range }}"
+    create: true
+    mode: "0644"
+
+- name: Registrar rango subgid para el usuario rootless
+  ansible.builtin.lineinfile:
+    path: /etc/subgid
+    regexp: "^{{ mock_user }}:"
+    line: "{{ mock_user }}:{{ mock_subuid_start }}:{{ mock_subuid_range }}"
+    create: true
+    mode: "0644"
+
+- name: Obtener el UID del usuario rootless
+  ansible.builtin.command: id -u {{ mock_user }}
+  register: mock_user_uid_cmd
+  changed_when: false
+
+- name: Guardar UID del usuario rootless
+  ansible.builtin.set_fact:
+    mock_user_uid: "{{ mock_user_uid_cmd.stdout }}"
+
+- name: Habilitar lingering para el usuario rootless (sesion de usuario de systemd)
+  # Sin sesion de usuario, crun no puede gestionar los cgroups del contenedor
+  # rootless: lo intenta por sd-bus y systemd/polkit responde "Access denied ...
+  # interactive authentication" (falla `podman build`/`podman run`). Con linger,
+  # systemd arranca user@<uid>.service al boot y crea /run/user/<uid> con su
+  # bus (delegacion de cgroups incluida). El contenedor en runtime usa
+  # --cgroups=disabled y NO depende de esta sesion; el build, si.
+  ansible.builtin.command: loginctl enable-linger {{ mock_user }}
+  args:
+    creates: /var/lib/systemd/linger/{{ mock_user }}
+
+- name: Asegurar la sesion de usuario de systemd activa (user@{{ mock_user_uid }}.service)
+  ansible.builtin.systemd:
+    name: "user@{{ mock_user_uid }}.service"
+    state: started
+
+- name: Limpiar procesos podman rootless de ejecuciones previas cortadas
+  # Un run/build previo interrumpido deja procesos (podman/conmon/netavark) que
+  # retienen el storage lock de {{ mock_user }} y bloquean cualquier operacion
+  # posterior (podman run queda colgado esperando el lock). Matamos los procesos
+  # del usuario y los helpers netavark/firewalld atascados (root).
+  ansible.builtin.shell: |
+    pkill -9 -u {{ mock_user }} -f 'podma[n]|conmo[n]|slirp4netn[s]|past[a]' 2>/dev/null || true
+    pkill -9 -f 'netavar[k] firewalld-reload' 2>/dev/null || true
+    sleep 2
+  changed_when: false
+
+- name: Resetear el storage de Podman si se solicita (app_node_reset_podman_storage)
+  # Recuperacion para builds interrumpidos durante un bloqueo de disco: si el
+  # storage rootless (/opt/mock-ecommerce/.local/share/containers/storage) se
+  # quedo corrupto/cunado (podman run/build colgados en jbd2_log_wait_commit,
+  # disco sano), borrar el storage fuerza a podman a recrearlo y a re-construir
+  # la imagen desde cero. Opt-in: SOLO cuando el operador lo pide.
+  ansible.builtin.file:
+    path: "{{ mock_home }}/.local/share/containers/storage"
+    state: absent
+  when: app_node_reset_podman_storage | bool
+
+- name: Garantizar directorio raiz del mock
+  ansible.builtin.file:
+    path: "{{ mock_home }}"
+    state: directory
+    owner: "{{ mock_user }}"
+    group: "{{ mock_user }}"
+    mode: "0750"
+
+- name: Garantizar directorio de build de la imagen
+  ansible.builtin.file:
+    path: "{{ mock_build_dir }}"
+    state: directory
+    owner: "{{ mock_user }}"
+    group: "{{ mock_user }}"
+    mode: "0750"
+
+- name: Garantizar directorio de runtime de Podman rootless
+  ansible.builtin.file:
+    path: "/run/{{ mock_runtime_dir_name }}"
+    state: directory
+    owner: "{{ mock_user }}"
+    group: "{{ mock_user }}"
+    mode: "0700"
+
+- name: Desplegar codigo del mock (contexto de build de la imagen)
   ansible.builtin.copy:
     src: mock_api.py
-    dest: "{{ mock_home }}/mock_api.py"
+    dest: "{{ mock_build_dir }}/mock_api.py"
     owner: "{{ mock_user }}"
     group: "{{ mock_user }}"
     mode: "0644"
+
+- name: Desplegar Containerfile de la imagen
+  ansible.builtin.copy:
+    src: Containerfile
+    dest: "{{ mock_build_dir }}/Containerfile"
+    owner: "{{ mock_user }}"
+    group: "{{ mock_user }}"
+    mode: "0644"
+
+- name: Desplegar entorno de la aplicacion (configuracion + secretos BD)
+  ansible.builtin.template:
+    src: mock-app.env.j2
+    dest: "{{ mock_home }}/mock-app.env"
+    owner: "{{ mock_user }}"
+    group: "{{ mock_user }}"
+    mode: "0600"
   notify: restart mock-app
 
-- name: Desplegar unidad systemd del mock
+- name: Comprobar si la imagen del mock ya existe
+  ansible.builtin.command: >-
+    podman image exists
+    {{ mock_image_name }}:{{ mock_image_tag }}
+  register: mock_img_exists
+  failed_when: false
+  changed_when: false
+  become: true
+  become_user: "{{ mock_user }}"
+  environment:
+    HOME: "{{ mock_home }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ mock_user_uid }}"
+
+- name: Obtener metadatos de la imagen existente
+  ansible.builtin.command: >-
+    podman image inspect
+    {{ mock_image_name }}:{{ mock_image_tag }}
+  register: mock_img_inspect
+  changed_when: false
+  failed_when: false
+  when: mock_img_exists.rc == 0
+  become: true
+  become_user: "{{ mock_user }}"
+  environment:
+    HOME: "{{ mock_home }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ mock_user_uid }}"
+
+- name: Calcular checksums del codigo fuente del mock
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: mock_src_stat
+  loop:
+    - "{{ mock_build_dir }}/mock_api.py"
+    - "{{ mock_build_dir }}/Containerfile"
+
+- name: Guardar hash esperado del codigo fuente
+  ansible.builtin.set_fact:
+    mock_src_hash: >-
+      {{ (mock_src_stat.results | map(attribute='stat.checksum') | list | join) | hash('sha256') }}
+
+- name: Guardar hash grabado en la imagen (si existe)
+  ansible.builtin.set_fact:
+    mock_img_src_hash: >-
+      {{ ((mock_img_inspect.stdout | from_json)[0].Labels | default({})).get('src_hash', '') }}
+  when:
+    - mock_img_exists.rc == 0
+    - mock_img_inspect.stdout | length > 0
+
+- name: Construir la imagen del mock (idempotente por hash de origen)
+  ansible.builtin.command: >-
+    podman build -t {{ mock_image_name }}:{{ mock_image_tag }}
+    --label src_hash={{ mock_src_hash }}
+    {{ mock_build_dir }}
+  when: >
+    mock_img_exists.rc != 0
+    or (mock_img_src_hash | default('')) != mock_src_hash
+  become: true
+  become_user: "{{ mock_user }}"
+  environment:
+    HOME: "{{ mock_home }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ mock_user_uid }}"
+  notify: restart mock-app
+
+- name: Desplegar unidad systemd del contenedor Podman rootless
   ansible.builtin.template:
     src: mock-app.service.j2
     dest: /etc/systemd/system/mock-app.service
@@ -42,7 +224,7 @@
     mode: "0644"
   notify: restart mock-app
 
-- name: Habilitar y arrancar el servicio del mock
+- name: Habilitar y arrancar la unidad del contenedor
   ansible.builtin.systemd:
     name: mock-app.service
     enabled: true

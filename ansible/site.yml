@@ -11,18 +11,24 @@
 
 - name: Suministro de la capa de datos (PostgreSQL)
   hosts: db
+  vars_files:
+    - group_vars/vault.yml
   become: true
   roles:
     - role: database
 
 - name: Suministro de la capa de aplicacion (mock API)
   hosts: app
+  vars_files:
+    - group_vars/vault.yml
   become: true
   roles:
     - role: app_node
 
 - name: Suministro del perimetro (Nginx + WAF ModSecurity)
   hosts: lb
+  vars_files:
+    - group_vars/vault.yml
   become: true
   roles:
     - role: perimeter_lb

@@ -1,9 +1,41 @@
 ---
-# Variables del rol app_node (valores de la capa de aplicacion).
+# Variables del rol app_node (capa de aplicacion). El mock API se ejecuta en
+# un contenedor Podman rootless propiedad del usuario {{ mock_user }}.
 
-# Puerto donde escucha el mock API (el LB balancea a este puerto en app-net).
+# Puerto donde escucha el mock (el LB balancea a este puerto en app-net).
 app_http_port: 8080
 
-# Usuario del sistema ejecutor del mock (minimos privilegios).
+# Usuario del sistema que ejecuta el contenedor rootless (minimos privilegios).
 mock_user: mockapp
 mock_home: /opt/mock-ecommerce
+
+# --- Contenedor Podman rootless ----------------------------------------------
+# Nombre local (localhost/) para que podman nunca intente bajarla de un
+# registro; la imagen se construye en el nodo durante el suministro.
+mock_image_name: localhost/mock-ecommerce
+mock_image_tag: latest
+mock_container_name: mock-app
+# Directorio de build (contexto) de la imagen. Aislado de mock_home para que
+# los secretos de mock-app.env no entren en el contexto de build.
+mock_build_dir: "{{ mock_home }}/build"
+# Nombre del directorio de runtime que systemd crea en /run para Podman
+# rootless (XDG_RUNTIME_DIR): /run/mockapp.
+mock_runtime_dir_name: mockapp
+# Reset opt-in del storage rootless de Podman (borra la imagen y las capas;
+# el siguiente run re-descarga la base y reconstruye). Usar si un build
+# interrumpido dejo el storage cunado (podman colgado en jbd2_log_wait_commit
+# con el disco sano). Ver docs/soluciones-ansible-errores.md seccion 5.
+app_node_reset_podman_storage: false
+# Rango subuid/subgid reservado en /etc/sub{u,g}id para el mapeo de usuarios
+# del contenedor rootless.
+mock_subuid_start: 200000
+mock_subuid_range: 65536
+
+# --- Conexion a PostgreSQL (data-net) -----------------------------------------
+# La BD escucha SOLO en la interfaz data-net (10.10.30.50 = database_data_ip
+# del rol database); los app-nodes la alcanzan por su interfaz 10.10.30.x.
+mock_db_host: "10.10.30.50"
+mock_db_port: "{{ postgresql_port }}"
+mock_db_name: "{{ ecommerce_db_name }}"
+mock_db_user: "{{ ecommerce_db_user }}"
+mock_db_password: "{{ ecommerce_db_password }}"

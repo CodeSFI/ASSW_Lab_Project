@@ -108,14 +108,17 @@ resource "openstack_networking_secgroup_rule_v2" "app_http_from_dmz" {
 
 # Regla: Tráfico de base de datos PostgreSQL (puerto 5432) hacia la capa Data
 # Justificación: Aislamiento crítico de persistencia. El servidor de base de datos solo
-# acepta tráfico TCP en el puerto 5432 si procede estrictamente de la red de aplicación
-# (10.10.20.0/24). Bloquea accesos directos desde la DMZ o desde el exterior.
+# acepta tráfico TCP en el puerto 5432 si procede estrictamente de la red de datos
+# (10.10.30.0/24): los app-nodes hablan con la BD por su interfaz data-net
+# (10.10.30.11/.12), la única ruta hasta la IP de escucha 10.10.30.50.
+# Bloquea accesos directos desde la DMZ, el balanceador, la red de aplicacion
+# (10.10.20.0/24) y el exterior.
 resource "openstack_networking_secgroup_rule_v2" "db_from_app" {
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "tcp"
   port_range_min    = 5432
   port_range_max    = 5432
-  remote_ip_prefix  = openstack_networking_subnet_v2.app_subnet.cidr
+  remote_ip_prefix  = openstack_networking_subnet_v2.data_subnet.cidr
   security_group_id = openstack_networking_secgroup_v2.secgroup_internal.id
 }
