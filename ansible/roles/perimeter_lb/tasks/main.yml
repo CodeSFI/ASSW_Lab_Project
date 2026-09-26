@@ -19,6 +19,152 @@
     enabled: true
     state: started
 
+# ------------------------- Semana 2 · certificado TLS ------------------------
+- name: "S2 · Crear directorio de certificados"
+  ansible.builtin.file:
+    path: "{{ tls_cert_dir }}"
+    state: directory
+    mode: "0700"
+    owner: root
+    group: root
+
+- name: "S2 · Generar clave privada + certificado autofirmado (idempotente)"
+  ansible.builtin.command: >-
+    openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days {{ tls_cert_days }}
+    -keyout {{ tls_cert_dir }}/cantabrico.key
+    -out {{ tls_cert_dir }}/cantabrico.crt
+    -subj "/CN={{ tls_cert_cn }}" -addext "subjectAltName={{ tls_san }}"
+  args:
+    creates: "{{ tls_cert_dir }}/cantabrico.crt"
+  notify: restart nginx
+
+# --------------- Semana 2 · conector ModSecurity-nginx (solo 1a vez) ---------
+- name: "S2 · ¿Existe ya el modulo dinamico?"
+  ansible.builtin.stat:
+    path: "{{ modsec_module_path }}"
+  register: modsec_module
+
+- name: "S2 · Detectar version de nginx instalada"
+  ansible.builtin.command: nginx -v
+  register: nginx_v
+  changed_when: false
+  when: not modsec_module.stat.exists
+
+- name: "S2 · Normalizar version (de 'nginx/1.27.4' a '1.27.4')"
+  ansible.builtin.set_fact:
+    nginx_version: "{{ nginx_v.stderr | regex_replace('^.*nginx/([0-9]+(?:\\.[0-9]+)*).*$', '\\1') }}"
+  when: not modsec_module.stat.exists
+
+- name: "S2 · Descargar fuentes de nginx de la misma version"
+  ansible.builtin.get_url:
+    url: "https://nginx.org/download/nginx-{{ nginx_version }}.tar.gz"
+    dest: "{{ modsec_src_dir }}/nginx-{{ nginx_version }}.tar.gz"
+  when: not modsec_module.stat.exists
+
+- name: "S2 · Clonar el conector ModSecurity-nginx"
+  ansible.builtin.git:
+    repo: "{{ modsec_connector_repo }}"
+    dest: "{{ modsec_connector_dir }}"
+    depth: 1
+  when: not modsec_module.stat.exists
+
+- name: "S2 · Compilar el modulo dinamico (configure + make modules)"
+  block:
+    - name: "S2a · Extraer fuentes de nginx"
+      ansible.builtin.unarchive:
+        src: "{{ modsec_src_dir }}/nginx-{{ nginx_version }}.tar.gz"
+        dest: "{{ modsec_src_dir }}"
+        remote_src: true
+
+    - name: "S2b · Configurar con --with-compat y el conector"
+      ansible.builtin.command: "./configure --with-compat --add-dynamic-module={{ modsec_connector_dir }}"
+      args:
+        chdir: "{{ modsec_src_dir }}/nginx-{{ nginx_version }}"
+      changed_when: false
+
+    - name: "S2c · Compilar los modulos dinamicos"
+      ansible.builtin.command: "make modules -j{{ ansible_processor_vcpus | default(2) }}"
+      args:
+        chdir: "{{ modsec_src_dir }}/nginx-{{ nginx_version }}"
+      changed_when: false
+  when: not modsec_module.stat.exists
+
+- name: "S2 · Crear directorio de modulos de nginx"
+  ansible.builtin.file:
+    path: "{{ modsec_module_path | dirname }}"
+    state: directory
+    mode: "0755"
+  when: not modsec_module.stat.exists
+
+- name: "S2 · Instalar el modulo dinamico en nginx"
+  ansible.builtin.copy:
+    src: "{{ modsec_src_dir }}/nginx-{{ nginx_version }}/objs/ngx_http_modsecurity_module.so"
+    dest: "{{ modsec_module_path }}"
+    remote_src: true
+    mode: "0644"
+  when: not modsec_module.stat.exists
+  notify: restart nginx
+
+- name: "S2 · Desplegar directiva load_module del conector"
+  ansible.builtin.copy:
+    src: modsec-load.conf
+    dest: "{{ modsec_load_conf }}"
+    mode: "0644"
+  notify: restart nginx
+
+# ------------------- Semana 2 · OWASP CRS + motor ModSecurity ----------------
+- name: "S2 · Crear arbol de ModSecurity"
+  ansible.builtin.file:
+    path: "{{ modsec_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: "S2 · Clonar OWASP CRS (version fijada)"
+  ansible.builtin.git:
+    repo: "{{ crs_git_url }}"
+    dest: "{{ modsec_crs_dir }}"
+    version: "{{ crs_git_version }}"
+    depth: 1
+
+- name: "S2 · Activar crs-setup.conf (a partir del ejemplo)"
+  ansible.builtin.copy:
+    src: "{{ modsec_crs_dir }}/crs-setup.conf.example"
+    dest: "{{ modsec_crs_dir }}/crs-setup.conf"
+    remote_src: true
+    mode: "0644"
+
+- name: "S2 · Desplegar configuracion base del motor ModSecurity"
+  ansible.builtin.template:
+    src: modsecurity.conf.j2
+    dest: "{{ modsec_dir }}/modsecurity.conf"
+    mode: "0644"
+
+- name: "S2 · Fijar el modo del motor WAF (On / DetectionOnly)"
+  ansible.builtin.lineinfile:
+    path: "{{ modsec_dir }}/modsecurity.conf"
+    regexp: "^SecRuleEngine\\s+\\S+"
+    line: "SecRuleEngine {{ modsec_rule_engine }}"
+    create: true
+  notify: reload nginx
+
+- name: "S2 · Activar OWASP CRS dentro del motor"
+  ansible.builtin.blockinfile:
+    path: "{{ modsec_dir }}/modsecurity.conf"
+    marker: "# {mark} ANSIBLE perimeter_lb - OWASP CRS"
+    block: |
+      # OWASP Core Rule Set
+      Include {{ modsec_crs_dir }}/crs-setup.conf
+      Include {{ modsec_crs_dir }}/rules/*.conf
+  notify: reload nginx
+
+- name: "S2 · Crear fichero de auditoria del WAF"
+  ansible.builtin.file:
+    path: "{{ modsec_audit_log }}"
+    state: touch
+    mode: "0640"
+    owner: www-data
+    group: adm
+
 - name: "Desplegar nginx.conf principal"
   ansible.builtin.template:
     src: nginx.conf.j2
@@ -38,3 +184,43 @@
   register: nginx_test
   changed_when: false
   failed_when: nginx_test.rc != 0
+
+# --- Multihomed: evitar doble ruta por defecto (ECMP) -------------------------
+# DMZ y MGMT están conectadas al router. El LB debe alcanzar los nodos app
+# SIEMPRE desde la interfaz DMZ (10.10.10.10) porque sg-internal solo permite
+# 8080 desde la subred DMZ. Si el flujo sale por MGMT (10.10.99.10) lo descarta
+# el grupo de seguridad. Se anula la ruta por defecto de la interfaz MGMT.
+- name: "Identificar la interfaz de gestión (10.10.99.0/24)"
+  ansible.builtin.set_fact:
+    mgmt_iface: "{{ item }}"
+  loop: "{{ ansible_facts.interfaces }}"
+  when:
+    - mgmt_iface is not defined
+    - ansible_facts[item] is defined
+    - ansible_facts[item].ipv4 is defined
+    - ansible_facts[item].ipv4.address is defined
+    - ansible_facts[item].ipv4.address is match('^10\.10\.99\.')
+
+- name: "Netplan: la interfaz de gestión no instala ruta por defecto"
+  ansible.builtin.copy:
+    dest: /etc/netplan/99-mgmt-no-default.yaml
+    content: |
+      network:
+        version: 2
+        renderer: networkd
+        ethernets:
+          {{ mgmt_iface }}:
+            dhcp4: true
+            dhcp4-overrides:
+              use-routes: false
+    owner: root
+    group: root
+    mode: "0600"
+  when: mgmt_iface is defined
+  register: mgmt_netplan
+
+- name: "Aplicar netplan (interfaz de gestión)"
+  ansible.builtin.command: netplan apply
+  when:
+    - mgmt_netplan is defined
+    - mgmt_netplan.changed
