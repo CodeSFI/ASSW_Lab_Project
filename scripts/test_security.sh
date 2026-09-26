@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test_security.sh — Integrante 2: verificacion del perimetro (Semana 3).
+# test_security.sh — Verificacion del perimetro (balanceo, WAF, rate limit, TLS).
 # Uso:  LB_FIP=156.35.98.152 ./test_security.sh [--balancing|--waf|--rate|--tls|--failover|all]
 # Desde el control node. Requiere: curl y openssl.
 set -uo pipefail

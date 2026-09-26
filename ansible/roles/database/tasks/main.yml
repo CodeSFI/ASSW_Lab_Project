@@ -1,14 +1,10 @@
 ---
 # Rol: database
-# Objetivo (Semana 2): desplegar PostgreSQL en srv-db-core01, escuchando
-# únicamente en la interfaz de data-net (10.10.30.0/24), crear la base de
-# datos/usuario {{ ecommerce_db_name }}/{{ ecommerce_db_user }}, y configurar
-# el backup periodico cifrado con GPG.
+# Objetivo: desplegar PostgreSQL escuchando solo en data-net (10.10.30.0/24),
+# crear la base/usuario {{ ecommerce_db_name }}/{{ ecommerce_db_user }} y
+# configurar el backup periodico cifrado con GPG.
 #
-# NOTA: pg_hba permite las conexiones desde database_app_network (data-net),
-# que es el enlace real Apps <-> DB. El comentario inicial de tarea citaba
-# la app_subnet (10.10.20.0/24), pero los app_nodes no enrutan por esa red
-# hacia la base de datos.
+# NOTA: los app_nodes llegan a la DB por data-net, no por app-subnet.
 
 - name: Instalar PostgreSQL, dependencias de Ansible y GPG
   ansible.builtin.apt:

@@ -1,2 +1,5 @@
 ---
-ansible_ssh_common_args: '-o ProxyCommand="ssh -i ~/.ssh/Lab_project.pem -W %h:%p ubuntu@{{ bastion_fip }}"'
+# Salto por el bastión con UNA sola autenticación persistente (ControlMaster):
+# el túnel se reutiliza entre hosts para no martillear el bastión (que limita
+# conexiones rápidas repetidas). El socket queda vivo 600s entre tareas.
+ansible_ssh_common_args: '-o ProxyCommand="ssh -i ~/.ssh/Lab_project.pem -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ControlMaster=auto -o ControlPath=/tmp/opencode/ansible-bast.sock -o ControlPersist=600 -W %h:%p ubuntu@{{ bastion_fip }}"'

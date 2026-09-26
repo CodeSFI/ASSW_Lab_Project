@@ -1,7 +1,7 @@
 ---
-# Variables del rol perimeter_lb (capa perimetral, Integrante 2).
+# Variables del rol perimeter_lb (capa perimetral).
 
-# --- Semana 1 · Nginx: proxy inverso + balanceador ---------------------------
+# --- Nginx: proxy inverso + balanceador ---
 nginx_listen_http_port: 80
 nginx_listen_https_port: 443
 
@@ -24,7 +24,7 @@ lb_proxy_connect_timeout: 2
 lb_proxy_read_timeout: 10
 lb_proxy_next_upstream: error timeout invalid_header http_500 http_502 http_503 http_504
 
-# --- Semana 2 · TLS ----------------------------------------------------------
+# --- TLS ---
 tls_cert_dir: /etc/nginx/ssl
 tls_cert_cn: lb-proxy-cantabrico-01
 tls_cert_days: 365
@@ -41,13 +41,13 @@ tls_session_cache: "shared:SSL:10m"
 tls_session_timeout: 10m
 hsts_max_age: 63072000        # 2 anos, con includeSubDomains
 
-# --- Semana 2 · Rate limiting -----------------------------------------------
+# --- Rate limiting ---
 rate_limit_zone_name: ecommerce
 rate_limit_zone_size: 10m
 rate_limit_rps: 10            # peticiones/segundo permitidas por IP
 rate_limit_burst: 20          # rafaga admitida por encima de la tasa
 
-# --- Semana 2 · ModSecurity + OWASP CRS --------------------------------------
+# --- ModSecurity + OWASP CRS ---
 modsec_rule_engine: "On"                 # On (bloquea) | DetectionOnly (solo registra)
 modsec_dir: /etc/nginx/modsecurity
 modsec_load_conf: /etc/nginx/modules-enabled/50-modsecurity.conf

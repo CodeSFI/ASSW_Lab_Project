@@ -4,10 +4,7 @@
 
 # ------------------------------------------------------------------------------
 # 1. VM: Balanceador / WAF (DMZ)
-# Rol: Punto de entrada único del tráfico web desde Internet.
-# Justificación: Al ser el único nodo expuesto a los usuarios, centraliza la
-# terminación TLS (cifrado SSL) y la inspección WAF, evitando que las peticiones
-# maliciosas alcancen las capas internas.
+# Único nodo expuesto a Internet: centraliza terminación TLS e inspección WAF.
 # ------------------------------------------------------------------------------
 # Puerto explícito en la red DMZ con IP estática
 resource "openstack_networking_port_v2" "port_lb_dmz" {
@@ -41,17 +38,23 @@ resource "openstack_networking_port_v2" "port_lb_mgmt" {
 }
 
 resource "openstack_compute_instance_v2" "lb_proxy" {
+  # Timeout de creacion ampliado: el cluster del lab tarda mas de 1h en provisionar.
+  timeouts {
+    create = "2h"
+    update = "2h"
+  }
+
   # Nombre contextualizado con prefijo para evitar colisiones
-  name        = "${var.project_prefix}-lb-proxy-01"
+  name = "${var.project_prefix}-lb-proxy-01"
 
   # Asocia la imagen base del SO (referenciada dinámicamente en main.tf para no usar IDs estáticos)
-  image_id    = data.openstack_images_image_v2.base_image.id
+  image_id = data.openstack_images_image_v2.base_image.id
 
   # Sabor/recursos de hardware (vCPUs/RAM) parametrizado para evitar agotar cuotas
-  flavor_id   = data.openstack_compute_flavor_v2.default_flavor.id
+  flavor_id = data.openstack_compute_flavor_v2.default_flavor.id
 
   # Clave SSH pública inyectada por cloud-init para acceso administrativo inicial
-  key_pair    = var.keypair_name
+  key_pair = var.keypair_name
 
   # Interfaz 1: Red DMZ pública (10.10.10.0/24) por donde recibe el tráfico balanceado
   network {
@@ -66,9 +69,7 @@ resource "openstack_compute_instance_v2" "lb_proxy" {
 
 # ------------------------------------------------------------------------------
 # 2. VM: Bastion Host (Gestión / Out-of-Band)
-# Rol: Puerta de enlace segura para administradores y despliegues con Ansible.
-# Justificación: Ninguna máquina interna tiene IP pública ni puerto SSH expuesto;
-# todo el mantenimiento debe saltar obligatoriamente por esta máquina endurecida.
+# Único punto de entrada SSH: toda la administración salta obligatoriamente por él.
 # ------------------------------------------------------------------------------
 # Puerto explícito en la red MGMT con IP estática para recibir la IP flotante
 resource "openstack_networking_port_v2" "port_bastion_mgmt" {
@@ -88,11 +89,17 @@ resource "openstack_networking_port_v2" "port_bastion_mgmt" {
 }
 
 resource "openstack_compute_instance_v2" "bastion" {
+  # Timeout de creacion ampliado: el cluster del lab tarda mas de 1h en provisionar.
+  timeouts {
+    create = "2h"
+    update = "2h"
+  }
+
   # Nombre representativo del rol de operaciones con prefijo parametrizado
-  name        = "${var.project_prefix}-bastion-ops-01"
-  image_id    = data.openstack_images_image_v2.base_image.id
-  flavor_id   = data.openstack_compute_flavor_v2.default_flavor.id
-  key_pair    = var.keypair_name
+  name      = "${var.project_prefix}-bastion-ops-01"
+  image_id  = data.openstack_images_image_v2.base_image.id
+  flavor_id = data.openstack_compute_flavor_v2.default_flavor.id
+  key_pair  = var.keypair_name
 
   # Conectado únicamente a la red de gestión (10.10.99.0/24); desde aquí enruta
   # el tráfico administrativo hacia el resto de las máquinas
@@ -103,10 +110,7 @@ resource "openstack_compute_instance_v2" "bastion" {
 
 # ------------------------------------------------------------------------------
 # 3. VM: Nodo de Aplicación 01 (Capa Privada Replicada)
-# Rol: Primer servidor de lógica de negocio (mock HTTP de la tienda online).
-# Justificación: Instancia desacoplada para alta disponibilidad. Tiene acceso a
-# la red de datos privada para hablar directamente con la base de datos sin
-# exponer ese tráfico al balanceador ni a Internet.
+# Nodo mock a alta disponibilidad; habla con la DB por la red de datos privada.
 # ------------------------------------------------------------------------------
 # Puerto en red de aplicación (comunicación con el balanceador)
 resource "openstack_networking_port_v2" "port_app1_net" {
@@ -154,10 +158,16 @@ resource "openstack_networking_port_v2" "port_app1_mgmt" {
 }
 
 resource "openstack_compute_instance_v2" "app_node_01" {
-  name        = "${var.project_prefix}-app-node-01"
-  image_id    = data.openstack_images_image_v2.base_image.id
-  flavor_id   = data.openstack_compute_flavor_v2.default_flavor.id
-  key_pair    = var.keypair_name
+  # Timeout de creacion ampliado: el cluster del lab tarda mas de 1h en provisionar.
+  timeouts {
+    create = "2h"
+    update = "2h"
+  }
+
+  name      = "${var.project_prefix}-app-node-01"
+  image_id  = data.openstack_images_image_v2.base_image.id
+  flavor_id = data.openstack_compute_flavor_v2.default_flavor.id
+  key_pair  = var.keypair_name
 
   # Interfaz 1: Red de aplicación privada (10.10.20.0/24) para comunicar con el LB
   network {
@@ -177,9 +187,7 @@ resource "openstack_compute_instance_v2" "app_node_01" {
 
 # ------------------------------------------------------------------------------
 # 4. VM: Nodo de Aplicación 02 (Capa Privada Replicada)
-# Rol: Segundo servidor de lógica de negocio (réplica para balanceo de carga).
-# Justificación: Replica la configuración del nodo 01 garantizando que el clúster
-# tolere la caída de un servidor de backend sin interrumpir el servicio.
+# Réplica del nodo 01: el clúster tolera la caída de un backend sin cortar servicio.
 # ------------------------------------------------------------------------------
 # Puerto en red de aplicación
 resource "openstack_networking_port_v2" "port_app2_net" {
@@ -227,10 +235,16 @@ resource "openstack_networking_port_v2" "port_app2_mgmt" {
 }
 
 resource "openstack_compute_instance_v2" "app_node_02" {
-  name        = "${var.project_prefix}-app-node-02"
-  image_id    = data.openstack_images_image_v2.base_image.id
-  flavor_id   = data.openstack_compute_flavor_v2.default_flavor.id
-  key_pair    = var.keypair_name
+  # Timeout de creacion ampliado: el cluster del lab tarda mas de 1h en provisionar.
+  timeouts {
+    create = "2h"
+    update = "2h"
+  }
+
+  name      = "${var.project_prefix}-app-node-02"
+  image_id  = data.openstack_images_image_v2.base_image.id
+  flavor_id = data.openstack_compute_flavor_v2.default_flavor.id
+  key_pair  = var.keypair_name
 
   # Interfaz 1: Red de aplicación privada (10.10.20.0/24) para comunicar con el LB
   network {
@@ -250,12 +264,10 @@ resource "openstack_compute_instance_v2" "app_node_02" {
 
 # ------------------------------------------------------------------------------
 # 5. VM: Base de Datos (Capa Aislada / Data)
-# Rol: Servidor de persistencia de datos (PostgreSQL) y tareas de backup.
-# Justificación: Reside en 'data_net' (10.10.30.0/24), una red cerrada sin router/gateway
-# a Internet, compartida únicamente con los app_nodes. Esto elimina el riesgo
-# de exfiltración directa de datos y blinda el puerto 5432.
+# PostgreSQL en data_net (10.10.30.0/24), red cerrada sin gateway: compartida solo
+# con los app_nodes, sin ruta a Internet (ni exfiltración ni 5432 expuesto).
 # ------------------------------------------------------------------------------
-# Puerto en red de datos (comunicación exclusiva con app-node-01 y app-node-02)
+# Puerto en red de datos (comunicación exclusiva con los app_nodes)
 resource "openstack_networking_port_v2" "port_db_data" {
   name           = "${var.project_prefix}-port-db-data"
   network_id     = openstack_networking_network_v2.data_net.id
@@ -286,10 +298,16 @@ resource "openstack_networking_port_v2" "port_db_mgmt" {
 }
 
 resource "openstack_compute_instance_v2" "db_core" {
-  name        = "${var.project_prefix}-db-core-01"
-  image_id    = data.openstack_images_image_v2.base_image.id
-  flavor_id   = data.openstack_compute_flavor_v2.default_flavor.id
-  key_pair    = var.keypair_name
+  # Timeout de creacion ampliado: el cluster del lab tarda mas de 1h en provisionar.
+  timeouts {
+    create = "2h"
+    update = "2h"
+  }
+
+  name      = "${var.project_prefix}-db-core-01"
+  image_id  = data.openstack_images_image_v2.base_image.id
+  flavor_id = data.openstack_compute_flavor_v2.default_flavor.id
+  key_pair  = var.keypair_name
 
   # Interfaz 1: Red de datos aislada (10.10.30.0/24) exclusiva con los app_nodes
   network {
@@ -303,22 +321,24 @@ resource "openstack_compute_instance_v2" "db_core" {
 }
 
 # ==============================================================================
-# ASIGNACIÓN DE IP FLOTANTE PREEXISTENTE PARAMETRIZADA (BASTIÓN)
-# Principio de defensa en profundidad y optimización de cuota:
-# Se consulta la IP flotante ya reservada en Horizon mediante el parámetro
-# 'bastion_floating_ip'. Esto evita realizar peticiones POST de reserva a Neutron,
-# previniendo errores de OverQuota.
+# IPs flotantes PREEXISTENTES (ya reservadas en Horizon, parametrizadas por
+# variable): se asocian sin solicitar reserva nueva a Neutron (evita OverQuota).
 # ==============================================================================
-
-# Consulta el DataSource de la IP existente indicada en la variable
-#data "openstack_networking_floatingip_v2" "fip_bastion" {
-#  address = var.bastion_floating_ip
-#}
 
 # Asocia la IP pública al puerto de la interfaz de gestión del Bastión
 resource "openstack_networking_floatingip_associate_v2" "fip_bastion_assoc" {
   floating_ip = var.bastion_floating_ip
   port_id     = openstack_networking_port_v2.port_bastion_mgmt.id
+  # Espera a que la subred MGMT este enrutada al exterior (evita
+  # "ExternalGatewayForFloatingIPNotFound" al asociar la FIP demasiado pronto).
+  depends_on = [openstack_networking_router_interface_v2.router_mgmt]
+}
+
+resource "openstack_networking_floatingip_associate_v2" "fip_lb_assoc" {
+  floating_ip = var.lb_floating_ip
+  port_id     = openstack_networking_port_v2.port_lb_dmz.id
+  # Espera a que la subred DMZ este enrutada al exterior antes de asociar la FIP.
+  depends_on = [openstack_networking_router_interface_v2.router_dmz]
 }
 
 resource "openstack_networking_floatingip_associate_v2" "fip_lb_assoc" {
@@ -334,11 +354,11 @@ output "instances_summary" {
   description = "Resumen de todas las VMs creadas con sus IPs principales"
   value = {
     lb_proxy = {
-      id          = openstack_compute_instance_v2.lb_proxy.id
-      name        = openstack_compute_instance_v2.lb_proxy.name
-      status      = openstack_compute_instance_v2.lb_proxy.power_state
-      dmz_ip      = "10.10.10.10"
-      mgmt_ip     = "10.10.99.10"
+      id      = openstack_compute_instance_v2.lb_proxy.id
+      name    = openstack_compute_instance_v2.lb_proxy.name
+      status  = openstack_compute_instance_v2.lb_proxy.power_state
+      dmz_ip  = "10.10.10.10"
+      mgmt_ip = "10.10.99.10"
     }
     bastion = {
       id          = openstack_compute_instance_v2.bastion.id
@@ -348,27 +368,27 @@ output "instances_summary" {
       floating_ip = var.bastion_floating_ip
     }
     app_node_01 = {
-      id          = openstack_compute_instance_v2.app_node_01.id
-      name        = openstack_compute_instance_v2.app_node_01.name
-      status      = openstack_compute_instance_v2.app_node_01.power_state
-      app_ip      = "10.10.20.11"
-      data_ip     = "10.10.30.11"
-      mgmt_ip     = "10.10.99.21"
+      id      = openstack_compute_instance_v2.app_node_01.id
+      name    = openstack_compute_instance_v2.app_node_01.name
+      status  = openstack_compute_instance_v2.app_node_01.power_state
+      app_ip  = "10.10.20.11"
+      data_ip = "10.10.30.11"
+      mgmt_ip = "10.10.99.21"
     }
     app_node_02 = {
-      id          = openstack_compute_instance_v2.app_node_02.id
-      name        = openstack_compute_instance_v2.app_node_02.name
-      status      = openstack_compute_instance_v2.app_node_02.power_state
-      app_ip      = "10.10.20.12"
-      data_ip     = "10.10.30.12"
-      mgmt_ip     = "10.10.99.22"
+      id      = openstack_compute_instance_v2.app_node_02.id
+      name    = openstack_compute_instance_v2.app_node_02.name
+      status  = openstack_compute_instance_v2.app_node_02.power_state
+      app_ip  = "10.10.20.12"
+      data_ip = "10.10.30.12"
+      mgmt_ip = "10.10.99.22"
     }
     db_core = {
-      id          = openstack_compute_instance_v2.db_core.id
-      name        = openstack_compute_instance_v2.db_core.name
-      status      = openstack_compute_instance_v2.db_core.power_state
-      data_ip     = "10.10.30.50"
-      mgmt_ip     = "10.10.99.50"
+      id      = openstack_compute_instance_v2.db_core.id
+      name    = openstack_compute_instance_v2.db_core.name
+      status  = openstack_compute_instance_v2.db_core.power_state
+      data_ip = "10.10.30.50"
+      mgmt_ip = "10.10.99.50"
     }
   }
 }
