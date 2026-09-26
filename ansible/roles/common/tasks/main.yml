@@ -1,0 +1,38 @@
+---
+# Rol: common
+# Objetivo: dejar todas las VMs (incluido el bastion) con los paquetes del
+# sistema al dia antes de suministrar cada capa, y mantenerlas parcheadas
+# con unattended-upgrades. No crea ni modifica usuarios.
+
+- name: Actualizar indice y paquetes del sistema
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: "{{ common_apt_cache_valid_time }}"
+    upgrade: "{{ common_apt_upgrade }}"
+
+- name: Instalar unattended-upgrades
+  ansible.builtin.apt:
+    name: unattended-upgrades
+    state: present
+
+- name: Habilitar actualizaciones de seguridad automaticas
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Comprobar si hace falta reiniciar
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: common_reboot_required
+
+- name: Reiniciar si la actualizacion lo requiere (kernel, libc...)
+  ansible.builtin.reboot:
+    reboot_timeout: "{{ common_reboot_timeout }}"
+  when:
+    - common_reboot_if_required | bool
+    - common_reboot_required.stat.exists

@@ -1,7 +1,13 @@
 ---
 # Playbook maestro de suministro de la infraestructura.
-# Aplica por capas: datos -> aplicacion. Ejecutar desde el directorio ansible/:
+# Aplica por capas: base -> datos -> aplicacion -> perimetro. Ejecutar desde el directorio ansible/:
 #   ansible-playbook -i inventory.ini site.yml --ask-vault-pass
+
+- name: Actualizacion base de todas las VMs
+  hosts: all
+  become: true
+  roles:
+    - role: common
 
 - name: Suministro de la capa de datos (PostgreSQL)
   hosts: db

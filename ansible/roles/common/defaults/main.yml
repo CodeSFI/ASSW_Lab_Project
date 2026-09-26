@@ -1,0 +1,12 @@
+---
+# Variables del rol common (actualizacion base de todas las VMs).
+
+# Segundos durante los que se considera valido el indice de apt descargado.
+common_apt_cache_valid_time: 3600
+
+# Tipo de actualizacion: dist (permite cambiar dependencias, p.ej. kernel) | safe | full
+common_apt_upgrade: dist
+
+# Reiniciar automaticamente si el sistema lo pide tras la actualizacion.
+common_reboot_if_required: true
+common_reboot_timeout: 600
