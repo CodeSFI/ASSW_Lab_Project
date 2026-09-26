@@ -169,14 +169,14 @@
   ansible.builtin.template:
     src: nginx.conf.j2
     dest: /etc/nginx/nginx.conf
-    mode: "0600"
+    mode: "0644"
   notify: reload nginx
 
 - name: "Desplegar sitio ecommerce (upstreams + balanceo)"
   ansible.builtin.template:
     src: ecommerce.conf.j2
     dest: /etc/nginx/conf.d/ecommerce.conf
-    mode: "0600"
+    mode: "0644"
   notify: reload nginx
 
 - name: "Validar sintaxis de la configuracion"

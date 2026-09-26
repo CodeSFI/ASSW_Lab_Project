@@ -74,7 +74,6 @@ server {
     # Proxy inverso + rate limiting hacia el pool ecommerce.
     location / {
         limit_req zone={{ rate_limit_zone_name }} burst={{ rate_limit_burst }} nodelay;
-
         proxy_pass http://ecommerce_backend;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
