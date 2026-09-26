@@ -1,9 +1,9 @@
-# nginx.conf gestionado por el rol perimeter_lb (Integrante 2).
+# nginx.conf gestionado por el rol perimeter_lb.
 user www-data;
 worker_processes auto;
 pid /run/nginx.pid;
 
-# Carga de modulos dinamicos (en S2 se anade el conector ModSecurity-nginx).
+# Carga de modulos dinamicos (aquí se anade el conector ModSecurity-nginx).
 include /etc/nginx/modules-enabled/*.conf;
 
 events {

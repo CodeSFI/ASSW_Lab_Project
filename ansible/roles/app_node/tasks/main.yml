@@ -1,12 +1,8 @@
 ---
 # Rol: app_node
-# Objetivo (Semana 1): desplegar el mock HTTP de la API de e-commerce en
-# los nodos de aplicacion, escuchando en {{ app_http_port }} y exponiendo
-# /health para que el balanceador compruebe la disponibilidad.
-#
-# El mock se ejecuta como un proceso sistema (systemd) bajo el usuario
-# dedicado sin privilegios. El empaquetado en contenedor Podman rootless
-# queda recogido como evolucion futura en el Plan de Fran.
+# Objetivo: desplegar el mock HTTP de la API en los nodos de aplicacion,
+# escuchando en {{ app_http_port }} y exponiendo /health para el balanceador.
+# El proceso corre como usuario de sistema sin privilegios (systemd).
 
 - name: Instalar Python y herramientas minimas
   ansible.builtin.apt:
