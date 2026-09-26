@@ -16,6 +16,22 @@
     state: present
     update_cache: true
 
+- name: Garantizar directorio de configuracion de contenedores
+  ansible.builtin.file:
+    path: /etc/containers/containers.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Configurar netavark para no depender de firewalld (SG del proyecto)
+  # Con firewalld instalado pero INACTIVO, netavark se queda bloqueado en su
+  # helper 'firewalld-reload' (proceso colgado indefinidamente) y podman
+  # build/run esperan para siempre. El filtrado de red lo hacen los Security
+  # Groups de OpenStack, asi que no se programan reglas de firewalld en host.
+  ansible.builtin.copy:
+    src: containers-network.conf
+    dest: /etc/containers/containers.conf.d/20-mockapp-firewall-none.conf
+    mode: "0644"
+
 - name: Crear usuario de sistema para el contenedor rootless (sin login)
   ansible.builtin.user:
     name: "{{ mock_user }}"
@@ -39,6 +55,53 @@
     line: "{{ mock_user }}:{{ mock_subuid_start }}:{{ mock_subuid_range }}"
     create: true
     mode: "0644"
+
+- name: Obtener el UID del usuario rootless
+  ansible.builtin.command: id -u {{ mock_user }}
+  register: mock_user_uid_cmd
+  changed_when: false
+
+- name: Guardar UID del usuario rootless
+  ansible.builtin.set_fact:
+    mock_user_uid: "{{ mock_user_uid_cmd.stdout }}"
+
+- name: Habilitar lingering para el usuario rootless (sesion de usuario de systemd)
+  # Sin sesion de usuario, crun no puede gestionar los cgroups del contenedor
+  # rootless: lo intenta por sd-bus y systemd/polkit responde "Access denied ...
+  # interactive authentication" (falla `podman build`/`podman run`). Con linger,
+  # systemd arranca user@<uid>.service al boot y crea /run/user/<uid> con su
+  # bus (delegacion de cgroups incluida). El contenedor en runtime usa
+  # --cgroups=disabled y NO depende de esta sesion; el build, si.
+  ansible.builtin.command: loginctl enable-linger {{ mock_user }}
+  args:
+    creates: /var/lib/systemd/linger/{{ mock_user }}
+
+- name: Asegurar la sesion de usuario de systemd activa (user@{{ mock_user_uid }}.service)
+  ansible.builtin.systemd:
+    name: "user@{{ mock_user_uid }}.service"
+    state: started
+
+- name: Limpiar procesos podman rootless de ejecuciones previas cortadas
+  # Un run/build previo interrumpido deja procesos (podman/conmon/netavark) que
+  # retienen el storage lock de {{ mock_user }} y bloquean cualquier operacion
+  # posterior (podman run queda colgado esperando el lock). Matamos los procesos
+  # del usuario y los helpers netavark/firewalld atascados (root).
+  ansible.builtin.shell: |
+    pkill -9 -u {{ mock_user }} -f 'podma[n]|conmo[n]|slirp4netn[s]|past[a]' 2>/dev/null || true
+    pkill -9 -f 'netavar[k] firewalld-reload' 2>/dev/null || true
+    sleep 2
+  changed_when: false
+
+- name: Resetear el storage de Podman si se solicita (app_node_reset_podman_storage)
+  # Recuperacion para builds interrumpidos durante un bloqueo de disco: si el
+  # storage rootless (/opt/mock-ecommerce/.local/share/containers/storage) se
+  # quedo corrupto/cunado (podman run/build colgados en jbd2_log_wait_commit,
+  # disco sano), borrar el storage fuerza a podman a recrearlo y a re-construir
+  # la imagen desde cero. Opt-in: SOLO cuando el operador lo pide.
+  ansible.builtin.file:
+    path: "{{ mock_home }}/.local/share/containers/storage"
+    state: absent
+  when: app_node_reset_podman_storage | bool
 
 - name: Garantizar directorio raiz del mock
   ansible.builtin.file:
@@ -100,7 +163,7 @@
   become_user: "{{ mock_user }}"
   environment:
     HOME: "{{ mock_home }}"
-    XDG_RUNTIME_DIR: "/run/{{ mock_runtime_dir_name }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ mock_user_uid }}"
 
 - name: Obtener metadatos de la imagen existente
   ansible.builtin.command: >-
@@ -114,7 +177,7 @@
   become_user: "{{ mock_user }}"
   environment:
     HOME: "{{ mock_home }}"
-    XDG_RUNTIME_DIR: "/run/{{ mock_runtime_dir_name }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ mock_user_uid }}"
 
 - name: Calcular checksums del codigo fuente del mock
   ansible.builtin.stat:
@@ -149,7 +212,7 @@
   become_user: "{{ mock_user }}"
   environment:
     HOME: "{{ mock_home }}"
-    XDG_RUNTIME_DIR: "/run/{{ mock_runtime_dir_name }}"
+    XDG_RUNTIME_DIR: "/run/user/{{ mock_user_uid }}"
   notify: restart mock-app
 
 - name: Desplegar unidad systemd del contenedor Podman rootless

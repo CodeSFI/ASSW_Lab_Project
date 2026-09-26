@@ -21,6 +21,11 @@ mock_build_dir: "{{ mock_home }}/build"
 # Nombre del directorio de runtime que systemd crea en /run para Podman
 # rootless (XDG_RUNTIME_DIR): /run/mockapp.
 mock_runtime_dir_name: mockapp
+# Reset opt-in del storage rootless de Podman (borra la imagen y las capas;
+# el siguiente run re-descarga la base y reconstruye). Usar si un build
+# interrumpido dejo el storage cunado (podman colgado en jbd2_log_wait_commit
+# con el disco sano). Ver docs/soluciones-ansible-errores.md seccion 5.
+app_node_reset_podman_storage: false
 # Rango subuid/subgid reservado en /etc/sub{u,g}id para el mapeo de usuarios
 # del contenedor rootless.
 mock_subuid_start: 200000
