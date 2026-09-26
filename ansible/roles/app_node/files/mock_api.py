@@ -13,6 +13,8 @@ import json
 import os
 import socket
 import sys
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import psycopg2
@@ -201,7 +203,20 @@ if __name__ == "__main__":
     port = int(os.environ.get("MOCK_HTTP_PORT") or "8080")
     if len(sys.argv) > 1:
         port = int(sys.argv[1])
-    init_db()
+
+    def _init_db_loop():
+        """Reintenta init_db() cada 15 s hasta que la BD responde y la tabla
+        products esta creada/sembrada.
+
+        Tolerancia al orden de suministro: si este contenedor arranca antes que
+        el PostgreSQL (o mientras la BD reinicia), la tabla se crea en cuanto
+        la BD esta disponible sin necesidad de reiniciar el contenedor.
+        """
+        while not init_db():
+            time.sleep(15)
+
+    threading.Thread(target=_init_db_loop, name="db-init-retry", daemon=True).start()
+
     sys.stderr.write(
         "Mock e-commerce listening 0.0.0.0:%d host=%s db=%s:%s/%s\n"
         % (port, HOST, DB_CONFIG["host"], DB_CONFIG["port"], DB_CONFIG["dbname"])

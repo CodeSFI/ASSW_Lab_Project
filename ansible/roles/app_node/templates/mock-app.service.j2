@@ -24,11 +24,16 @@ ExecStartPre=-/usr/bin/podman rm -f {{ mock_container_name }}
 #    puerto); por red se limita con el SG app_http_from_dmz.
 #  - --cgroups=disabled evita exigir delegacion de cgroups al sistema (no
 #    hay sesion de usuario con linger; suficiente para un contenedor).
+#  - --network=slirp4netns: el backend por defecto de Podman 5.x (pasta)
+#    falla en estos nodos con "Couldn't open network namespace ... Permission
+#    denied"; slirp4netns (instalado por el rol) funciona igual: NAT rootless
+#    por el que PostgreSQL ve la IP de data-net del nodo app.
 #  - --env-file inyecta configuracion + secretos de la BD (0600).
 ExecStart=/usr/bin/podman run \
     --name {{ mock_container_name }} \
     --rm \
     --cgroups=disabled \
+    --network=slirp4netns \
     -p {{ app_http_port }}:{{ app_http_port }} \
     --env-file {{ mock_home }}/mock-app.env \
     --hostname {{ ansible_hostname | default(inventory_hostname) }} \

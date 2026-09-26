@@ -81,6 +81,16 @@
     name: "user@{{ mock_user_uid }}.service"
     state: started
 
+- name: Detener la unidad mock-app si existe (evita competencia con el rol)
+  # En re-ejecuciones la unidad puede estar corriendo (con Restart=on-failure),
+  # recreando/borrando /run/mockapp (RuntimeDirectory) y peleando el lock del
+  # storage de podman mientras el rol construye/verifica. Pararla primero hace
+  # el suministro determinista; al final del rol se vuelve a arrancar.
+  ansible.builtin.systemd:
+    name: mock-app.service
+    state: stopped
+  failed_when: false
+
 - name: Limpiar procesos podman rootless de ejecuciones previas cortadas
   # Un run/build previo interrumpido deja procesos (podman/conmon/netavark) que
   # retienen el storage lock de {{ mock_user }} y bloquean cualquier operacion

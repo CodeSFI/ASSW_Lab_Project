@@ -20,6 +20,38 @@
     state: present
     update_cache: true
 
+- name: Detectar version real del cluster PostgreSQL instalado
+  # El rol no debe asumir la version mayor (la imagen del nodo trae la que
+  # traiga; aqui resulto ser 18 en una imagen Ubuntu 26.04, no 14/22.04).
+  # pg_lsclusters lista "Version Cluster ..." y cogemos la primera.
+  ansible.builtin.command: pg_lsclusters --no-header
+  register: pg_clusters
+  changed_when: false
+  failed_when: pg_clusters.rc != 0 or pg_clusters.stdout_lines | length == 0
+
+- name: Fijar version real del cluster para todas las rutas de configuracion
+  ansible.builtin.set_fact:
+    postgresql_version: "{{ pg_clusters.stdout_lines[0].split()[0] }}"
+
+- name: Limpiar configuracion fantasma creada por asuncion de version
+  # Durante un suministro previo se escribio config en /etc/postgresql/14
+  # (directorio auto-creado por el template), cuando el cluster real es otro.
+  # Si la version real es 14 no hacemos nada (no era fantasma).
+  ansible.builtin.file:
+    path: "/etc/postgresql/14"
+    state: absent
+  when: postgresql_version != "14"
+
+- name: Garantizar directorio de drop-in de configuracion (conf.d)
+  # Ubuntu no crea /etc/postgresql/<ver>/main/conf.d por defecto; el drop-in de
+  # escucha necesita el directorio existir antes del template.
+  ansible.builtin.file:
+    path: "/etc/postgresql/{{ postgresql_version }}/main/conf.d"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0755"
+
 - name: Plantillar configuracion de escucha (conf.d drop-in)
   ansible.builtin.template:
     src: conf.d-supply.conf.j2

@@ -1,7 +1,10 @@
 ---
 # Variables del rol database (rutas/valores específicos de la capa de datos).
 
-# Versión principal de PostgreSQL instalada por defecto en la imagen Ubuntu-22.04
+# Version principal de PostgreSQL instalada por defecto en la imagen
+# Ubuntu-22.04. NOTA: el rol detecta la version real del cluster con
+# pg_lsclusters (set_fact) y sobreescribe este valor; la imagen del nodo
+# resulto ser Ubuntu 26.04 con PostgreSQL 18.
 postgresql_version: "14"
 
 # IP fija de la interfaz de data-net (10.10.30.0/24). El servidor escuchara
